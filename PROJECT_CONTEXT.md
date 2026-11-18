@@ -1,6 +1,6 @@
 # ToonForge AI — Project Context & Development Order
 
-**Last updated:** 18 November 2026  
+**Last updated:** 18 November 2026 (five-stage execution plan adopted)  
 **Project name:** ToonForge AI  
 **Library folder:** `/ToonForge AI`  
 **Architecture document:** `ARCHITECTURE.md`  
@@ -49,162 +49,73 @@ The My Motion Studio repository is a candidate foundation/editor, not a complete
 - Prompt-to-video automation has not been implemented.
 - No project repository/fork has been created and no Render service/site has been deployed.
 
-## 4. Development order — mandatory sequence
+## 4. Project execution plan — five mandatory stages
 
-Complete the project in the following dependency order. Reuse prior inspection and test evidence; do not repeat completed work without a reason.
+The project will be delivered through exactly **five top-level stages**. The former 18-stage roadmap is retired as the top-level plan; its engineering work is consolidated under these five gates. Do not treat the five stages as five individual tasks: each stage may contain multiple work blocks, and each stage must pass its exit criteria before the next stage begins.
 
-### Stage 1 — Foundation and source audit
-- Complete the My Motion Studio source-code audit.
-- Inspect current modules, APIs, editor state model, timeline, animation, asset loading and export implementation.
-- Identify existing reusable functionality, missing logic, bugs, duplication and technical debt.
-- Verify license and dependency health.
-- Produce an integration plan without redesigning/recreating working upstream features.
+### Stage 1 — Backend ready
+Scope:
+- Complete the source-code and architecture audit of the selected editor foundation.
+- Import/integrate the approved foundation into the existing ToonForge AI repository without losing upstream license and attribution.
+- Implement and verify the backend/domain foundation required by the product: project model, scene/story schemas, validation, orchestration contracts, persistence boundaries, provider adapters and error handling.
+- Establish reproducible dependency installation, configuration validation, typecheck, lint, unit/integration tests and production build.
+- Verify security boundaries: secrets remain server-side, generated model output is schema-validated, and generated code is never executed.
+- Document the backend API contracts, data flow, known limitations and test evidence.
 
-**Exit criteria:** source audit and reuse/extension map documented.
+**Exit gate:** backend code is integrated, builds reproducibly, critical tests pass, interfaces/contracts are documented, and no unresolved blocker prevents deployment preparation.
 
-### Stage 2 — RDC browser and WebGL feasibility
-- Reuse the already-proven RDC Chromium/Puppeteer setup.
-- Open My Motion Studio in RDC.
-- Check app readiness, console errors and network failures.
-- Test WebGL and WebGL2 context creation.
-- Record renderer details where exposed and distinguish hardware acceleration from software rendering.
-- Render a small animated Three.js test scene.
+### Stage 2 — Deployment ready
+Scope:
+- Prepare the deployable application and production build configuration.
+- Verify environment-variable requirements, build command, publish/output directory, routing and static/server hosting requirements.
+- Configure only the approved GitHub repository and approved Render account/workspace.
+- Create the single ToonForge AI Render service only after source and build verification; keep the plan free where available.
+- Deploy and verify the hosted application, HTTPS, health/readiness behavior where applicable, logs and rollback/recovery procedure.
+- Do not mistake static hosting for GPU rendering or long-running video rendering; rendering remains on a verified client/browser unless a separately approved architecture changes this.
 
-**Exit criteria:** target app and 3D canvas initialize reliably on the intended browser.
+**Exit gate:** the correct application is deployed from the approved repository, the live URL is reachable and verified, and deployment/recovery steps are documented.
 
-### Stage 3 — Video export feasibility
-- Inspect supported `MediaRecorder` MIME types.
-- Record a 10-second test animation.
-- Verify downloaded file, MIME type, playability, dimensions and duration.
-- Benchmark progressively: 10 seconds, 30 seconds, 60 seconds.
-- Measure time, memory, dropped frames and browser stability.
-- Only attempt the 1–3 minute target after short tests pass.
+### Stage 3 — RDC connections ready
+Scope:
+- Verify the approved RDC device connection and project-only access boundary.
+- Configure the project-specific browser/runtime connection to the deployed ToonForge AI application.
+- Verify Chromium launch, application load, authentication/session handling if applicable, browser console/network health, and required WebGL/WebGL2 capability.
+- Verify the target editor initializes and a small 3D scene can render on the intended client.
+- Verify media capture/export capability with a short deterministic test, including actual MIME type, file integrity, dimensions, duration and playback.
+- Measure device limits before attempting longer renders; reuse already completed basic Chromium connectivity evidence rather than repeating it without reason.
 
-**Exit criteria:** a short valid video can be exported and performance limits are measured.
+**Exit gate:** RDC can reliably reach and operate the deployed app, the 3D runtime is proven on the target client, and the required browser capture path is verified with real output.
 
-### Stage 4 — Application foundation
-- Integrate the existing editor into ToonForge AI.
-- Stabilize dependencies and build scripts.
-- Establish typecheck, lint, unit tests and production build.
-- Keep changes incremental; do not blindly recreate or reorganize upstream code.
+### Stage 4 — Automation ready
+Scope:
+- Complete the prompt-to-story and duration-aware story planning workflow.
+- Convert validated stories into scene/shot manifests with timing, camera, assets, animation and audio instructions.
+- Implement character, environment and prop asset resolution with provenance/license tracking.
+- Implement the typed scene compiler/adapter that maps validated manifests into the editor's real internal model.
+- Implement animation, voice/audio synchronization, scene assembly and rendering orchestration to the extent supported by verified assets and runtime capabilities.
+- Add stage progress, bounded retries, idempotency, checkpoints and resume-from-failure behavior.
+- Automate the full workflow through RDC using stable application interfaces/DOM selectors rather than brittle coordinate-only automation.
+- Verify repeatable test projects and ensure automation never publishes or uploads user videos without explicit approval.
 
-**Exit criteria:** reproducible build and tested editor integration.
+**Exit gate:** a known prompt can run through the automated pipeline to a locally/exported video artifact, with resumable failures and deterministic validation evidence.
 
-### Stage 5 — GitHub and Render deployment
-- Decide/confirm repository ownership and name.
-- Create or fork a dedicated repository only with explicit approval.
-- Configure CI.
-- Deploy a non-production Render Free Static Site only with explicit approval.
-- Verify HTTPS URL and RDC access.
+### Stage 5 — Production ready
+Scope:
+- Complete end-to-end quality control for missing assets, failed scenes, black/frozen frames, audio silence/misalignment, duration mismatch and corrupt/incomplete exports.
+- Verify output quality, file integrity, supported formats, runtime, memory use and repeatability against explicit acceptance criteria.
+- Complete security, dependency, license, privacy and asset-provenance reviews.
+- Run regression, failure-recovery, load/performance and end-to-end acceptance tests on the actual target environment.
+- Document operational procedures, known limitations, monitoring/logging, backup/recovery and release process.
+- Resolve all release-blocking defects and record evidence for every production-readiness claim.
 
-**Exit criteria:** stable hosted frontend accessible from RDC.
+**Exit gate:** all agreed acceptance criteria pass on the intended environment, critical defects are closed, recovery/operations are documented, and the user explicitly approves any public release or publishing action.
 
-### Stage 6 — Project management engine
-- Create, save, load and duplicate local projects.
-- Manage project settings and scene lists.
-- Import/export project manifests and asset bundles.
-- Implement autosave/recovery where technically safe.
-
-**Exit criteria:** projects can be saved, reopened, exported and imported.
-
-### Stage 7 — AI story engine
-- Prompt-to-story outline.
-- Character descriptions and story continuity.
-- Dialogue/narration drafts.
-- Duration-aware story planning.
-- Provider-independent model adapter and strict structured-output validation.
-
-**Exit criteria:** prompt produces an editable, schema-valid story plan.
-
-### Stage 8 — Scene planning engine
-- Convert story into scenes and shots.
-- Allocate scene durations.
-- Define camera instructions, transitions and shot composition.
-- Validate total runtime and continuity.
-
-**Exit criteria:** story converts to a valid scene plan.
-
-### Stage 9 — Character generation system
-- Original character descriptions and asset selection/generation workflow.
-- Character identity/appearance consistency.
-- Character asset catalogue.
-- Evaluate rigging and animation compatibility.
-
-**Exit criteria:** required characters load consistently in the editor. Do not promise arbitrary automatic rigging until proven.
-
-### Stage 10 — Environment and props engine
-- Environments, backgrounds and props.
-- Materials, textures and lighting presets.
-- Asset provenance and license tracking.
-- Loadability and size validation.
-
-**Exit criteria:** scenes can resolve all required environment and prop assets.
-
-### Stage 11 — Animation engine
-- Character movement and reusable animation clips.
-- Facial/body expression support where assets allow it.
-- Keyframes, camera movement and timing.
-- Scene transitions and animation validation.
-
-**Exit criteria:** scene plan produces visible, correctly timed animation.
-
-### Stage 12 — Voice and audio engine
-- Text-to-speech integration selected on verified quality/cost grounds.
-- Character voice assignment.
-- Dialogue timing and synchronization.
-- Background music and sound effects with appropriate licensing.
-
-**Exit criteria:** audio timeline is synchronized with scene timing and export.
-
-### Stage 13 — Scene compiler
-- Convert validated scene manifests into editor state/commands.
-- Resolve assets and references.
-- Apply transforms, camera, lighting, animation and audio cues.
-- Keep a typed adapter between planner output and the editor's actual internal model.
-
-**Exit criteria:** known manifests deterministically build expected scenes.
-
-### Stage 14 — Automatic production orchestrator
-- Coordinate story, scenes, assets, animation, audio and rendering.
-- Stage status and progress reporting.
-- Bounded retries and error recovery.
-- Resume failed stages without regenerating successful work.
-
-**Exit criteria:** the production pipeline runs end-to-end with recoverable stage failures.
-
-### Stage 15 — Rendering and export engine
-- Render scene sequence in the verified client browser.
-- Record video and synchronize audio.
-- Export only formats proven to work.
-- Validate file size, duration, dimensions and playback.
-- Optimize quality/performance within measured device limits.
-
-**Exit criteria:** repeatable 1–3 minute video export on the chosen client hardware.
-
-### Stage 16 — Quality control engine
-- Detect missing assets and failed scene loads.
-- Check character consistency where measurable.
-- Detect silent/misaligned audio and duration mismatch.
-- Detect black frames, frozen output and incomplete exports.
-- Produce a final validation report.
-
-**Exit criteria:** invalid or incomplete output is detected before being marked complete.
-
-### Stage 17 — End-to-end browser automation
-- Automate prompt-to-final-video workflow through RDC.
-- Use stable app actions/DOM selectors, not brittle coordinate-only automation.
-- Verify retries, resume and export downloads.
-- Run repeatable end-to-end test projects.
-
-**Exit criteria:** known prompt produces a validated final video with minimal manual intervention.
-
-### Stage 18 — Final release and production-readiness review
-- Full source/security/license audit.
-- Performance optimization and regression tests.
-- Documentation, recovery procedures and known limitations.
-- Final end-to-end acceptance test.
-
-**Exit criteria:** all acceptance criteria pass; only then describe the project as complete/production-ready.
+### Stage sequencing rules
+1. Work on one stage/work block at a time; finish and verify it before moving on.
+2. A stage is not complete because code exists or a deployment command succeeded. Its exit gate must pass with direct evidence.
+3. Preserve the former 18 work areas as implementation details under these five stages; do not create a second competing roadmap.
+4. Reuse prior verified work and tests. Do not repeat completed checks without a specific reason.
+5. If a stage exposes a blocker in an earlier stage, return to that stage deliberately, fix it, and re-run only the affected acceptance checks.
 
 ## 5. Architecture and implementation rules
 
@@ -268,6 +179,78 @@ Do not restart the project, redo already verified RDC basic-browser test, create
 
 **Next action:** complete the remaining source audit, then run the target-app/WebGL/export feasibility tests. Maintain this file as the single project context/handoff source and update it after each meaningful milestone.
 
+---
+
+## 10. Explicit user-approved project scopes and execution boundaries — 18 November 2026
+
+This section records the user's explicit instructions and supersedes any earlier broad or conflicting scope assumptions in this document.
+
+### 10.1 GitHub — strict repository allowlist
+
+**Only authorized repository:** `https://github.com/shehrozali6465372-ctrl/toonforge-ai.git`
+
+- Work only inside `shehrozali6465372-ctrl/toonforge-ai` for all ToonForge GitHub operations.
+- The user explicitly approved all necessary scopes for this one repository.
+- Verified GitHub permissions on 18 November 2026: `admin=true`, `push=true`, `pull=true`, `maintain=true`; repository is public and currently reports default branch `main`.
+- Do not inspect, read, write, clone, configure, or otherwise touch any other GitHub repository as part of this project.
+- Do not interpret “all scopes” as permission to access unrelated repositories, organizations, secrets, or account settings.
+- Preserve the repository's existing content and history. Before writes, inspect the target repository state and avoid overwriting existing work.
+
+### 10.2 Render — strict account, workspace, and service boundary
+
+**Only authorized Render account connection:** `3rd render 3500`  
+**Only authorized workspace:** `My Workspace`  
+**Workspace ID:** `tea-db8u854s728c73b3pr60`
+
+- The user explicitly approved all necessary Render scopes only for this ToonForge AI project and the named workspace.
+- Create exactly the ToonForge AI service after its source code is ready and verified in the authorized GitHub repository.
+- Intended service: `toonforge-ai`, a Static Site if the verified application is a static Vite frontend; confirm the actual build command and publish directory from the repository before creation.
+- Do not create the service prematurely while the repository is empty or the branch/build configuration is unverified.
+- Do not inspect, modify, restart, redeploy, delete, rename, or change settings/secrets for any existing Render service or any other resource. In particular, do not touch the existing Binance announcement worker or Pinterest service.
+- Do not use the other connected Render accounts (`Render` or `Atoz product hub website`) for this project.
+- Once the service is created, its permitted scope is limited to the single ToonForge AI service: configure, deploy, inspect logs/events, and verify its live URL. Do not touch any other service/resource.
+- Keep the plan free where available. Do not incur paid costs or upgrade plans without separate explicit approval.
+
+### 10.3 Remote Desktop Commander — project-only machine operations
+
+**Verified device:** `localhost`  
+**Device ID:** `bd830869-fbae-4825-ae7b-5044d6161090`  
+**Last verified online:** 18 November 2026
+
+- The user explicitly approved all necessary RDC scopes for work related only to ToonForge AI.
+- Use RDC only for ToonForge-specific source checkout, project files, dependencies, builds, tests, browser automation, logs, and project documentation.
+- Work in a clearly isolated ToonForge project directory. Before creating or modifying files, verify the exact target path.
+- Do not inspect, modify, delete, stop, or otherwise interfere with unrelated projects, files, processes, credentials, or services on the device.
+- Do not perform broad filesystem cleanup or machine-wide configuration changes.
+
+### 10.4 Required execution sequence
+
+1. Inspect the exact upstream My Motion Studio repository and its license/source structure. Do not inspect unrelated repositories.
+2. Import/fork the source into the authorized `toonforge-ai` repository while preserving upstream attribution, license, and history where feasible. Do not replace or destroy existing repository content.
+3. Verify the imported code in the authorized repository: inspect the complete source structure, dependencies, build scripts, tests, typecheck, lint, security/license concerns, editor behavior, and export implementation.
+4. Run project-local tests/builds and the My Motion Studio browser/WebGL/MediaRecorder feasibility checks through the authorized RDC device.
+5. Fix only verified project defects and document changes and test evidence in the project context.
+6. Only after code is ready and verification passes, create the separate `toonforge-ai` Render Static Site in the authorized `3rd render 3500 / My Workspace` workspace.
+7. Verify the Render service and deployed URL without touching any other Render resource.
+
+### 10.5 Approval interpretation and safety controls
+
+- The user's “Approved all scopes” authorizes the project-specific operations described above within the explicit allowlists. It is not blanket authorization for unrelated repositories, services, accounts, projects, or machine resources.
+- No production publishing, external content posting, paid infrastructure, paid API subscriptions, or unrelated account changes are authorized by this scope approval.
+- Never claim an import, commit, build, test, deployment, or verification succeeded without direct tool evidence.
+- If an operation would cross an allowlist boundary, stop and ask before proceeding.
+- Preserve existing work; inspect before editing; prefer incremental, reversible changes.
+
+### 10.6 Scope verification snapshot — 18 November 2026
+
+| Resource | Verified state | Authorized action boundary |
+|---|---|---|
+| GitHub `shehrozali6465372-ctrl/toonforge-ai` | Repository exists; admin and push access confirmed; repo size reported 0 KB at last check; no usable `main` branch ref was found by Render create attempt | This repository only |
+| Render `3rd render 3500` / `My Workspace` | Workspace confirmed; existing services list was retrieved before scope was clarified | One new ToonForge AI service only, created after code verification |
+| RDC `localhost` | Device online; Linux ARM64 container; Node 22.23.1 and Python 3.11.2 available | ToonForge-specific files and processes only |
+
+**Current next action:** continue source inspection and import planning for My Motion Studio, then populate and verify only the authorized `toonforge-ai` repository. Render service creation remains deliberately deferred until the code is ready and verified.
+
 ## 10. Mandatory execution rules — 18 November 2026
 
 The canonical engineering and execution protocol is **RULES.md** in this project folder and repository. It is mandatory and supersedes conflicting generic workflow assumptions.
@@ -285,7 +268,9 @@ Key user instructions:
 
 ### Rules-file checkpoint
 - Created `RULES.md` in `/ToonForge AI/RULES.md`.
-- Pushed `RULES.md` to the approved GitHub repository on `main`.
-- GitHub commit: `462314f7ce1329a079c5db592fdfd4c17902e255`.
-- Remote fetch verification: successful.
+- Pushed `RULES.md`, `ARCHITECTURE.md`, and `PROJECT_CONTEXT.md` to the approved GitHub repository on `main`.
+- Rules commit: `462314f7ce1329a079c5db592fdfd4c17902e255`.
+- Architecture commit: `75f34c7860040ea12763f622a542fdc0d11120c1`.
+- Context commit: `b79ac424d02ce90a01c82e68b8cb4762126facaf`.
+- Remote fetch verification: all three files fetched successfully from `main`.
 - Next work block must start by verifying the repository state and then continue the My Motion Studio source audit/import. No Render service creation yet.
