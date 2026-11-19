@@ -284,7 +284,7 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 ### 11.1 GitHub and local repository state
 
 - Authorized write target remains only `shehrozali6465372-ctrl/toonforge-ai`.
-- GitHub `main` HEAD was verified as `dde87ca86dbd1f2bc5a4eb303b6d63f053bf91a5`.
+- GitHub `main` HEAD at the start of this audit was `dde87ca86dbd1f2bc5a4eb303b6d63f053bf91a5`; this Stage 1 audit checkpoint was then committed to `main` as `43cadc5b367e9c0b8aca397137b55193a19348e2`.
 - The GitHub `main` tree currently contains exactly `PROJECT_CONTEXT.md`, `ARCHITECTURE.md` and `RULES.md`; application source, `README.md`, `package.json`, CI workflow and license are not yet present on GitHub.
 - The three local project documents have Git blob IDs identical to their GitHub `main` counterparts. They must not be re-created as duplicate files during import.
 - Existing local checkout: `/tmp/toonforge-ai-stage1`.
