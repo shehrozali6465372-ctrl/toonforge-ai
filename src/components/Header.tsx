@@ -1,0 +1,83 @@
+import { Link, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { Moon, Sun, BookOpen, FolderOpen } from 'lucide-react';
+import { useTheme } from '@/lib/useTheme';
+
+export function Header() {
+  const { theme, toggleTheme } = useTheme();
+  const location = useLocation();
+  const { t, i18n } = useTranslation('common');
+
+  // No direct link to the editor: a project must be created (or opened) via
+  // the "Nouveau projet" modal on /projects, which is what actually creates
+  // a valid project id — /editor/new isn't a real project and just bounces
+  // back to /projects.
+  const navItems = [
+    { to: '/docs', label: t('nav.docs'), icon: BookOpen },
+    { to: '/projects', label: t('nav.projects'), icon: FolderOpen },
+  ];
+
+  return (
+    <header className="sticky top-0 z-40 backdrop-blur-xl bg-ink-900/80 border-b border-ink-700">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+        <Link to="/" className="flex items-center gap-2 group shrink-0">
+          <img
+            src="/icon-96.png"
+            alt="ToonForge AI"
+            className="w-8 h-8 rounded-lg shadow-lg shadow-accent-violet/20 group-hover:shadow-accent-violet/40 transition-shadow"
+          />
+          <span className="font-semibold text-ink-50 hidden sm:block">ToonForge AI</span>
+        </Link>
+
+        <nav className="flex items-center gap-1">
+          {navItems.map((item) => {
+            const active = location.pathname === item.to || (item.to !== '/' && location.pathname.startsWith(item.to));
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                  active
+                    ? 'text-accent-violet bg-accent-violet/10'
+                    : 'text-ink-200 hover:text-ink-50 hover:bg-ink-750'
+                }`}
+              >
+                <item.icon className="w-4 h-4" />
+                <span className="hidden md:block">{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center rounded-lg border border-ink-600 overflow-hidden text-xs font-bold" role="group" aria-label={t('language.toggleAria')}>
+            <button
+              onClick={() => i18n.changeLanguage('fr')}
+              aria-pressed={i18n.language === 'fr'}
+              className={`px-2 py-1 transition-colors ${i18n.language === 'fr' ? 'bg-accent-violet text-white' : 'text-ink-300 hover:text-ink-50 hover:bg-ink-750'}`}
+            >
+              FR
+            </button>
+            <button
+              onClick={() => i18n.changeLanguage('en')}
+              aria-pressed={i18n.language === 'en'}
+              className={`px-2 py-1 transition-colors ${i18n.language === 'en' ? 'bg-accent-violet text-white' : 'text-ink-300 hover:text-ink-50 hover:bg-ink-750'}`}
+            >
+              EN
+            </button>
+          </div>
+          <button onClick={toggleTheme} className="icon-btn" aria-label={t('theme.toggleAria')}>
+            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+          <Link
+            to="/settings"
+            title={t('settingsLink')}
+            className="w-8 h-8 rounded-full bg-gradient-to-br from-accent-pink to-accent-violet flex items-center justify-center text-xs font-bold text-white hover:opacity-85 transition-opacity"
+          >
+            MM
+          </Link>
+        </div>
+      </div>
+    </header>
+  );
+}

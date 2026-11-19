@@ -1,0 +1,34 @@
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dev-dist
+dist-ssr
+*.local
+
+# npm only — package-lock.json is the single committed lockfile (see
+# CONTRIBUTING.md); ignore other package managers' lockfiles so running
+# `yarn`/`pnpm` locally can't accidentally reintroduce one.
+yarn.lock
+pnpm-lock.yaml
+
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.env
+.claude
+.bolt
+# ToonForge local-only generated artifacts
+.toonforge-doc-snapshot/
