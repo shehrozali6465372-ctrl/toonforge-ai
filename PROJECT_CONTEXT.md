@@ -274,3 +274,68 @@ Key user instructions:
 - Context commit: `b79ac424d02ce90a01c82e68b8cb4762126facaf`.
 - Remote fetch verification: all three files fetched successfully from `main`.
 - Next work block must start by verifying the repository state and then continue the My Motion Studio source audit/import. No Render service creation yet.
+
+---
+
+## 11. Stage 1 continuation checkpoint — 19 November 2026
+
+This checkpoint supersedes stale repository and implementation-status snapshots in Sections 3, 9, 10.6 and the earlier "Next action" statements. It records the state verified during the 19 November continuation. It does not mark Stage 1 complete.
+
+### 11.1 GitHub and local repository state
+
+- Authorized write target remains only `shehrozali6465372-ctrl/toonforge-ai`.
+- GitHub `main` HEAD was verified as `dde87ca86dbd1f2bc5a4eb303b6d63f053bf91a5`.
+- The GitHub `main` tree currently contains exactly `PROJECT_CONTEXT.md`, `ARCHITECTURE.md` and `RULES.md`; application source, `README.md`, `package.json`, CI workflow and license are not yet present on GitHub.
+- The three local project documents have Git blob IDs identical to their GitHub `main` counterparts. They must not be re-created as duplicate files during import.
+- Existing local checkout: `/tmp/toonforge-ai-stage1`.
+- Local branch: `stage1-foundation`; HEAD: `161414bc8e7ed45f5fc3e7a278d1759e243e33f4` (upstream My Motion Studio PWA-install commit).
+- The local checkout is shallow and its HEAD has no common ancestor with GitHub `main`. The remote `toonforge/main` ref was fetched read-only. GitHub currently has no remote `stage1-foundation` branch.
+- Local worktree at this checkpoint: 18 staged paths (770 insertions, 525 deletions), zero unstaged changes. Existing staged work has been preserved; nothing was reset or discarded.
+- The staged README rewrite removes substantial upstream bilingual documentation and contributor guidance. Review and preserve useful upstream material rather than accepting that deletion blindly.
+- The staged CI change removes the inherited Netlify deploy jobs and retains verification-only CI, consistent with the rule that deployment must wait until Stage 2 approval.
+- Branding changes were staged in several files, but `vite.config.ts` still emits MyMotionStudio PWA manifest names and screenshot labels. Branding integration is incomplete.
+
+### 11.2 Reusable upstream foundation confirmed
+
+- React 19, TypeScript, Vite 8, React Router, Zustand and i18next provide the application shell and state/UI foundation.
+- Konva/react-konva provides the existing 2D canvas.
+- Three.js, React Three Fiber and drei provide the existing 3D scene graph, camera, lights, primitives, model loaders and viewport controls.
+- `src/lib/types.ts`, `factories.ts`, `store.ts` and `animation.ts` provide the existing project/scene/layer model, constructors, state mutations, undo/redo and keyframe interpolation.
+- `src/lib/db.ts` and `useAutoSave.ts` provide Dexie/IndexedDB local persistence and debounced autosave.
+- `ExportModal.tsx` contains browser canvas capture and GIF encoding. The editor is a reusable foundation, not a completed prompt-to-video pipeline.
+- Upstream MIT license file and copyright notice are present locally and must be preserved in the import.
+
+### 11.3 Verified implementation gaps and risks
+
+- No backend/API, LLM provider adapter, story planner, versioned scene-manifest schema, schema validator, deterministic scene compiler, cloud persistence or audio/voice pipeline was found in the inspected application source.
+- Project persistence is browser-local IndexedDB only; it is not server-side or cross-device persistence.
+- Project JSON import uses `JSON.parse` followed by a TypeScript cast and writes the result to IndexedDB without runtime schema validation.
+- Image/model imports read whole files into data URLs; no explicit file-size or content validation boundary was found. Single-file glTF import also needs validation for external buffer/texture URI handling.
+- Scene transition configuration is stored and exposed in the UI, but source search found no transition renderer/consumer in preview or export.
+- Timeline keyframe dragging calls `updateKeyframe` on every mousemove; that store method snapshots undo history on each update, so one drag can consume the 50-entry history.
+- Video export hard-codes `video/mp4`, `video/webm` or `video/quicktime` into MediaRecorder without checking `MediaRecorder.isTypeSupported`. The UI and locale documentation claim MP4/MOV support and MOV via ffmpeg.wasm, but no ffmpeg.wasm dependency or conversion path is present. Actual browser codec support and output files remain unverified.
+- GIF export is frame-by-frame and has no explicit output-size/memory guard for long or high-resolution projects.
+- Marketing/docs still claim transitions and export formats more broadly than the inspected runtime proves; correct claims only after the real implementation is verified.
+
+### 11.4 Local verification evidence — 19 November 2026
+
+- Existing dependency installation log records `npm ci` completed successfully.
+- `npm ls three --depth=0` resolved `three@0.185.1`.
+- `npm run full-test`: TypeScript typecheck passed, ESLint passed, and Vitest reported 5 test files / 89 tests passed.
+- `npm run build` emitted production files in `dist/` and Vite reported a successful build in 20.32 seconds. However, the Vite/Node process remained alive after printing the completed-build output and did not return a clean process exit. The project-owned stuck build session was terminated after inspecting its process tree. Therefore the build artifact was generated, but clean build-process termination remains unverified and must be investigated before claiming the build gate passed.
+- Main generated JavaScript bundle: 1,960.52 kB (560.91 kB gzip); Vite emitted its greater-than-500-kB chunk warning.
+- No target-app browser load, WebGL/WebGL2 renderer, MediaRecorder MIME support, real video export or 1–3 minute performance benchmark has been verified yet.
+- GitHub combined status for the current docs-only `main` commit returned no status checks; the local CI workflow has not yet been imported to GitHub.
+
+### 11.5 Exact next work block
+
+**Next task: integrate the audited upstream editor source into the authorized repository without losing either history or existing project documents.**
+
+1. Create a fresh integration branch from the current GitHub `main` (do not push the shallow upstream-based `stage1-foundation` branch directly).
+2. Import the upstream source snapshot at `161414bc8e7ed45f5fc3e7a278d1759e243e33f4`, preserving `LICENSE`, upstream copyright/attribution and useful upstream README documentation.
+3. Reuse the three already-existing GitHub documents; do not add duplicate copies.
+4. Apply the existing staged ToonForge branding/package/CI changes selectively. Correct the incomplete PWA branding and preserve useful README content.
+5. Review the resulting complete diff, run the relevant verification, and push this one import work block to the approved repository branch. Verify the remote branch commit and changed paths before starting backend/domain implementation.
+6. Do not create a Render service or deploy during this work block.
+
+**Status:** Stage 1 remains in progress. Source audit has established the reusable foundation and major gaps; source import/integration and backend/domain implementation are still pending.
