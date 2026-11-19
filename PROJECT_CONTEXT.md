@@ -322,8 +322,8 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 - Existing dependency installation log records `npm ci` completed successfully.
 - `npm ls three --depth=0` resolved `three@0.185.1`.
 - `npm run full-test`: TypeScript typecheck passed, ESLint passed, and Vitest reported 5 test files / 89 tests passed.
-- `npm run build` emitted production files in `dist/` and Vite reported a successful build in 20.32 seconds. However, the Vite/Node process remained alive after printing the completed-build output and did not return a clean process exit. The project-owned stuck build session was terminated after inspecting its process tree. Therefore the build artifact was generated, but clean build-process termination remains unverified and must be investigated before claiming the build gate passed.
-- Main generated JavaScript bundle: 1,960.52 kB (560.91 kB gzip); Vite emitted its greater-than-500-kB chunk warning.
+- Initial import-build verification exposed a Workbox/Terser worker-pool issue in this RDC container. It was diagnosed and fixed in the 19 November build-hardening work block; the final clean-install production build now exits with code 0. See Section 12.2.
+- Final clean-install build main JavaScript bundle: 1,961.50 kB (561.24 kB gzip); Vite emitted its greater-than-500-kB chunk warning. Track code splitting as a separate optimization task.
 - No target-app browser load, WebGL/WebGL2 renderer, MediaRecorder MIME support, real video export or 1–3 minute performance benchmark has been verified yet.
 - A verification-only GitHub Actions workflow is now included on `stage1/source-import`; it runs typecheck, lint, tests and build and contains no deployment job. Workflow run status has not yet been verified.
 
@@ -331,9 +331,9 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 
 **Completed 19 November 2026:** the audited editor foundation has been imported into the authorized repository on `stage1/source-import`, preserving the existing project documents and upstream Git history. See Section 12 for the exact remote commit and verification evidence.
 
-**Next task:** diagnose the Vite production-build process that emits completed artifacts but does not terminate cleanly. After the build gate is reliable, proceed with the typed backend/domain foundation. Do not create a Render service or deploy yet.
+**Next task:** begin the typed backend/domain foundation using the imported editor model and the existing project architecture. Do not duplicate the editor store, scene model or renderers. Do not create a Render service or deploy yet.
 
-**Status:** Stage 1 remains in progress; import is complete, while the build-process blocker and backend/domain implementation remain open.
+**Status:** Stage 1 remains in progress; source import and reproducible build/test gates are verified. Backend/domain implementation and browser/WebGL/export feasibility remain open.
 
 ---
 
@@ -353,21 +353,26 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 - The full bilingual README was preserved and edited in place rather than replaced with a shortened duplicate. Unsupported transition/export/offline claims were corrected in README and English/French UI documentation. PWA manifest branding now identifies ToonForge AI.
 - The imported GitHub Actions workflow is verification-only (typecheck, lint, test, build); it has no deployment steps. No Render service was created and no deployment was run.
 
-### 12.2 Integration verification
+### 12.2 Integration verification and build hardening — 19 November 2026
 
-- Existing dependency installation was reused through the same project dependency tree; package dependency manifests were compared and matched. No duplicate `npm ci` installation was run.
-- `npm run full-test` on `/tmp/toonforge-integration`: TypeScript typecheck passed, ESLint passed, 5 Vitest files passed, 89 tests passed.
-- `git diff --cached --check` passed before the import commit.
-- `npm run build` produced `dist/` successfully; Vite reported `built in 19.35s`.
-- **Build-process blocker remains:** after printing the completed build output, the Vite/Node process stayed alive. A 40-second bounded run ended with `BUILD_EXIT_CODE=124`; therefore clean build-process termination is not verified. The output bundle was 1,961.50 kB (561.24 kB gzip), and Vite emitted the >500 kB chunk warning.
-- No target-app browser load, WebGL/WebGL2 renderer, MediaRecorder MIME support, playable video export, audio export or 1–3 minute performance benchmark has been verified.
+- Root cause: this RDC Linux ARM64 container reports `os.cpus().length === 0` while `os.availableParallelism() === 8`. The installed transitive `@rollup/plugin-terser@1.0.0` used `os.cpus().length` as its default worker limit. Workbox production service-worker minification therefore created a zero-worker pool and left its build task pending.
+- Added `scripts/patch-terser-worker-pool.cjs` and a `prebuild` hook (not `postinstall`). The patch is idempotent and version-locked to `@rollup/plugin-terser@1.0.0`; it enforces a minimum of one worker in the package source, ESM distribution and CJS distribution. It fails closed if the dependency version or expected source changes, requiring a deliberate review. Applying it only before builds avoids modifying dependencies during ordinary installs and avoids requiring build-only dependencies for production-only installs. No extra npm dependency was added.
+- `package-lock.json` is unchanged from the imported source commit. The workaround is applied only to installed `node_modules`; it does not alter application runtime code or weaken service-worker minification.
+- Build-hardening commit: `7b039bd0885ab4e79f390cd66fb6fd315aba873c` (`fix: guard Workbox minifier against zero CPU count`). It was pushed to `stage1/source-import`; `git ls-remote` verified the remote branch HEAD equals this exact commit.
+- Clean install using the original lockfile: `npm ci --no-audit --no-fund` exited 0 and installed 644 packages. After switching the patch to `prebuild`, the three installed dependency files were reset to their upstream state and `npm run build` applied the workaround automatically before invoking Vite (`Applied @rollup/plugin-terser 1.0.0 zero-CPU worker fallback.`).
+- Final clean-install `npm run full-test`: TypeScript typecheck passed, ESLint passed, 5/5 Vitest files passed, 89/89 tests passed.
+- Final `npm run build` with the `prebuild` hook: exited 0. Vite transformed 2,478 modules and reported `built in 17.13s`; Workbox `generateSW` completed and generated `dist/sw.js` (2,046 bytes) and `dist/workbox-2fbc6a65.js` (15,026 bytes). PWA precache: 18 entries, 2,804.85 KiB.
+- Non-blocking optimization risk: the main JavaScript bundle is 1,961.50 kB (561.24 kB gzip), triggering Vite's >500 kB chunk warning. Code splitting/performance optimization remains future work; do not suppress the warning without evidence.
+- `git diff --check` passed after the code changes.
+- Still unverified: target-app browser load, WebGL/WebGL2 renderer, MediaRecorder MIME support, playable video export, audio export and 1–3 minute performance benchmark.
 
-### 12.3 Exact next work block
+### 12.3 Exact next work block — typed backend/domain foundation
 
-1. Diagnose why `vite build` remains in the Node event loop after reporting completion; identify the active handle/plugin and make the smallest verified fix.
-2. Re-run the bounded build and require a real exit code of 0; do not hide the issue with a longer timeout or claim success based only on generated files.
-3. Then implement the Stage 1 typed domain foundation: versioned project/story/scene schemas, runtime validation, planner/provider contracts, deterministic scene-compiler boundary, persistence abstraction and bounded error handling. Reuse the existing editor model; do not duplicate its store or renderers.
-4. Add focused tests for each new contract and preserve the existing 89 passing tests.
-5. Push and verify each completed work block on the authorized repository branch before starting the next one.
+1. Inspect the imported editor's existing project types, Zustand store, IndexedDB persistence, scene/object model and editor APIs. Map the reusable contracts before designing new ones.
+2. Define versioned, schema-validated ToonForge project, story and scene-manifest contracts. Validate untrusted planner output at runtime; do not execute generated JavaScript or shell commands.
+3. Establish provider-independent planner interfaces, asset provenance/license metadata, deterministic scene-compiler/adapter contracts and explicit persistence boundaries.
+4. Implement bounded orchestration errors, timeouts, retry semantics and checkpoint boundaries without creating a second editor store or duplicating existing rendering/animation modules.
+5. Add focused contract and integration tests; preserve all 89 existing passing tests and the clean production build.
+6. Complete and verify this work block, update this context file, then push to `stage1/source-import` before starting the next block.
 
-**Status:** Stage 1 is not complete and the project is not deployment-ready.
+**Status:** Stage 1 is not complete and the project is not deployment-ready. No Render service or deployment is authorized at this checkpoint.
