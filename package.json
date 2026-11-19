@@ -17,6 +17,7 @@
     "url": "https://github.com/shehrozali6465372-ctrl/toonforge-ai/issues"
   },
   "scripts": {
+    "prebuild": "node scripts/patch-terser-worker-pool.cjs",
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
