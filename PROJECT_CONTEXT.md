@@ -366,13 +366,29 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 - `git diff --check` passed after the code changes.
 - Still unverified: target-app browser load, WebGL/WebGL2 renderer, MediaRecorder MIME support, playable video export, audio export and 1–3 minute performance benchmark.
 
-### 12.3 Exact next work block — typed backend/domain foundation
+### 12.3 Existing editor/domain inventory — 19 November 2026
 
-1. Inspect the imported editor's existing project types, Zustand store, IndexedDB persistence, scene/object model and editor APIs. Map the reusable contracts before designing new ones.
-2. Define versioned, schema-validated ToonForge project, story and scene-manifest contracts. Validate untrusted planner output at runtime; do not execute generated JavaScript or shell commands.
-3. Establish provider-independent planner interfaces, asset provenance/license metadata, deterministic scene-compiler/adapter contracts and explicit persistence boundaries.
-4. Implement bounded orchestration errors, timeouts, retry semantics and checkpoint boundaries without creating a second editor store or duplicating existing rendering/animation modules.
-5. Add focused contract and integration tests; preserve all 89 existing passing tests and the clean production build.
-6. Complete and verify this work block, update this context file, then push to `stage1/source-import` before starting the next block.
+- **Reusable editor domain model:** `src/lib/types.ts:1-207` defines `Project`, `Scene`, the discriminated `Layer` union, `Keyframe`, `Transition`, `BackgroundFill` and `ProjectSettings`. This is the canonical editor-state model to target through an adapter. It has no `schemaVersion` and no runtime validation.
+- **Existing state/store:** `src/lib/store.ts:25-410` uses Zustand for project selection, scene/layer/keyframe mutations, current time, selection, save status and 50-entry undo/redo. Reuse this store; do not create a parallel editor store or replace its renderer-facing types.
+- **Renderers:** `Canvas2D.tsx` uses React-Konva; `Canvas3D.tsx` uses React Three Fiber/Three.js. Both consume the existing scene/layer model. `GroupLayer` and `parentId` exist in the types, but the current renderer dispatch does not render group nodes or apply group transforms.
+- **Animation:** `src/lib/animation.ts` provides keyframe lookup, easing and interpolation. New animation cues must compile into the existing supported keyframe/property model or be rejected explicitly; do not assume arbitrary properties are renderable.
+- **Persistence:** `src/lib/db.ts:4-27` uses Dexie/IndexedDB database `MotionStudioDB`, schema version 1, with a single `projects` table. It is local-device persistence only; there is no backend repository/API or migration framework. `saveProject` mutates `project.updatedAt` before writing.
+- **Import/export:** JSON export uses `downloadJSON`; `ProjectsPage.tsx:44-64` imports by `JSON.parse(...) as Project`, then replaces IDs/timestamps without runtime validation, file-size limits or schema migration. Image and imported-model assets are embedded as data URLs in layer fields.
+- **Duplication integrity gap:** `duplicateProject` remaps project, scene, layer and keyframe IDs, but does not remap `parentId` references. Existing tests verify fresh IDs but do not test group hierarchy integrity.
+- **Media export gaps:** `ExportModal.tsx:63-213` captures a canvas and uses GIF encoding or `MediaRecorder`. MIME types are hard-coded (`video/mp4`, `video/webm`, `video/quicktime`) without `MediaRecorder.isTypeSupported`; no audio track, voice pipeline, actual output-format validation or duration/integrity verification exists. The export completion path calls `saveProject` without awaiting it; cancellation/recorder-stop behavior also needs a dedicated regression review. These are recorded for the later rendering/export work block, not changed during this domain inventory.
+- **Existing tests:** five `src/lib/*.test.ts` suites cover factories, Dexie persistence, Zustand mutations/undo-redo, animation and autosave (89 tests). There are no current tests for untrusted project-file validation, versioned scene manifests, asset provenance, provider orchestration or real browser export.
+- **Validation dependencies:** no schema-validation library is declared directly in `package.json`. Do not rely on a transitive `ajv` installation; choose and declare a direct validator only if the schema design requires it.
+- **Product-specific modules absent:** repository search and README confirm no prompt/story planner, shot model, character/asset orchestration, provenance catalogue, dialogue/voice/audio track, deterministic scene compiler or end-to-end prompt-to-video workflow exists yet.
+- **Deployment/security boundary:** the current target is a static browser application; no backend API exists. Provider interfaces may be defined, but API secrets and authenticated model calls must not be placed in browser code. A real provider call requires an explicitly selected and approved server-side endpoint/hosting design.
+- **CI trigger limitation:** `.github/workflows/ci.yml` runs on pushes to `main` and pull requests targeting `main`; pushing `stage1/source-import` alone does not trigger GitHub Actions. The 89-test and production-build evidence in Section 12.2 is local RDC evidence, not a GitHub Actions result.
+
+### 12.4 Exact next work block — versioned domain contracts
+
+1. Define a versioned, runtime-validated ToonForge story/scene-manifest contract that is separate from the imported editor `Project` model. Keep the manifest provider-independent and deterministic.
+2. Specify scene timing, shots/camera intent, character/prop/environment asset references, animation cues, dialogue/audio intent, provenance/license fields and validation limits. Explicitly define which manifest features map to existing editor layers/keyframes and which are unsupported until a later renderer upgrade.
+3. Select a maintained runtime validator and add it as a direct dependency only after comparing bundle impact, schema ergonomics and server/client boundaries. Do not rely on transitive packages.
+4. Define a typed compiler/adapter boundary from validated manifest to existing `Project`/`Scene`/`Layer` structures. Do not duplicate the Zustand store, Konva renderer, Three.js renderer or animation engine.
+5. Add failing contract tests first, then implement schema validation and adapter tests. Preserve the 89 existing tests and clean build.
+6. Complete this work block, update this context file, commit and push to `stage1/source-import`, then verify the remote branch before starting the next work block.
 
 **Status:** Stage 1 is not complete and the project is not deployment-ready. No Render service or deployment is authorized at this checkpoint.
