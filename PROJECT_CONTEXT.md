@@ -293,7 +293,7 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 - Local worktree at this checkpoint: 18 staged paths (770 insertions, 525 deletions), zero unstaged changes. Existing staged work has been preserved; nothing was reset or discarded.
 - The staged README rewrite removes substantial upstream bilingual documentation and contributor guidance. Review and preserve useful upstream material rather than accepting that deletion blindly.
 - The staged CI change removes the inherited Netlify deploy jobs and retains verification-only CI, consistent with the rule that deployment must wait until Stage 2 approval.
-- Branding changes were staged in several files, but `vite.config.ts` still emits MyMotionStudio PWA manifest names and screenshot labels. Branding integration is incomplete.
+- ToonForge branding is now applied to the imported app shell, English/French landing copy, editor labels, README and PWA manifest/screenshot labels. The upstream editor attribution and MIT license remain intact.
 
 ### 11.2 Reusable upstream foundation confirmed
 
@@ -303,7 +303,7 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 - `src/lib/types.ts`, `factories.ts`, `store.ts` and `animation.ts` provide the existing project/scene/layer model, constructors, state mutations, undo/redo and keyframe interpolation.
 - `src/lib/db.ts` and `useAutoSave.ts` provide Dexie/IndexedDB local persistence and debounced autosave.
 - `ExportModal.tsx` contains browser canvas capture and GIF encoding. The editor is a reusable foundation, not a completed prompt-to-video pipeline.
-- Upstream MIT license file and copyright notice are present locally and must be preserved in the import.
+- Upstream MIT license file and copyright notice were preserved in the imported branch; the upstream commit history is retained as a merge parent.
 
 ### 11.3 Verified implementation gaps and risks
 
@@ -313,9 +313,9 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 - Image/model imports read whole files into data URLs; no explicit file-size or content validation boundary was found. Single-file glTF import also needs validation for external buffer/texture URI handling.
 - Scene transition configuration is stored and exposed in the UI, but source search found no transition renderer/consumer in preview or export.
 - Timeline keyframe dragging calls `updateKeyframe` on every mousemove; that store method snapshots undo history on each update, so one drag can consume the 50-entry history.
-- Video export hard-codes `video/mp4`, `video/webm` or `video/quicktime` into MediaRecorder without checking `MediaRecorder.isTypeSupported`. The UI and locale documentation claim MP4/MOV support and MOV via ffmpeg.wasm, but no ffmpeg.wasm dependency or conversion path is present. Actual browser codec support and output files remain unverified.
+- Video export hard-codes `video/mp4`, `video/webm` or `video/quicktime` into MediaRecorder without checking `MediaRecorder.isTypeSupported`. The UI still exposes format choices, but the descriptions now warn that MP4/WebM support is browser-dependent and MOV is not implemented; no ffmpeg.wasm dependency or conversion path is present. Actual browser codec support and output files remain unverified.
 - GIF export is frame-by-frame and has no explicit output-size/memory guard for long or high-resolution projects.
-- Marketing/docs still claim transitions and export formats more broadly than the inspected runtime proves; correct claims only after the real implementation is verified.
+- The integration branch corrects the README and English/French landing/editor documentation to distinguish transition settings from rendering and to state that MP4/WebM support is browser-dependent and MOV conversion is not implemented.
 
 ### 11.4 Local verification evidence — 19 November 2026
 
@@ -325,17 +325,49 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 - `npm run build` emitted production files in `dist/` and Vite reported a successful build in 20.32 seconds. However, the Vite/Node process remained alive after printing the completed-build output and did not return a clean process exit. The project-owned stuck build session was terminated after inspecting its process tree. Therefore the build artifact was generated, but clean build-process termination remains unverified and must be investigated before claiming the build gate passed.
 - Main generated JavaScript bundle: 1,960.52 kB (560.91 kB gzip); Vite emitted its greater-than-500-kB chunk warning.
 - No target-app browser load, WebGL/WebGL2 renderer, MediaRecorder MIME support, real video export or 1–3 minute performance benchmark has been verified yet.
-- GitHub combined status for the current docs-only `main` commit returned no status checks; the local CI workflow has not yet been imported to GitHub.
+- A verification-only GitHub Actions workflow is now included on `stage1/source-import`; it runs typecheck, lint, tests and build and contains no deployment job. Workflow run status has not yet been verified.
 
-### 11.5 Exact next work block
+### 11.5 Source import work block status
 
-**Next task: integrate the audited upstream editor source into the authorized repository without losing either history or existing project documents.**
+**Completed 19 November 2026:** the audited editor foundation has been imported into the authorized repository on `stage1/source-import`, preserving the existing project documents and upstream Git history. See Section 12 for the exact remote commit and verification evidence.
 
-1. Create a fresh integration branch from the current GitHub `main` (do not push the shallow upstream-based `stage1-foundation` branch directly).
-2. Import the upstream source snapshot at `161414bc8e7ed45f5fc3e7a278d1759e243e33f4`, preserving `LICENSE`, upstream copyright/attribution and useful upstream README documentation.
-3. Reuse the three already-existing GitHub documents; do not add duplicate copies.
-4. Apply the existing staged ToonForge branding/package/CI changes selectively. Correct the incomplete PWA branding and preserve useful README content.
-5. Review the resulting complete diff, run the relevant verification, and push this one import work block to the approved repository branch. Verify the remote branch commit and changed paths before starting backend/domain implementation.
-6. Do not create a Render service or deploy during this work block.
+**Next task:** diagnose the Vite production-build process that emits completed artifacts but does not terminate cleanly. After the build gate is reliable, proceed with the typed backend/domain foundation. Do not create a Render service or deploy yet.
 
-**Status:** Stage 1 remains in progress. Source audit has established the reusable foundation and major gaps; source import/integration and backend/domain implementation are still pending.
+**Status:** Stage 1 remains in progress; import is complete, while the build-process blocker and backend/domain implementation remain open.
+
+---
+
+## 12. Stage 1 source import checkpoint — 19 November 2026
+
+### 12.1 GitHub integration result
+
+- Authorized repository: `shehrozali6465372-ctrl/toonforge-ai` only.
+- Integration branch: `stage1/source-import`, created from GitHub `main` at `fcdaf3df50090a3137abe837d9374b03a90c7182`.
+- Upstream source revision: `rodolphe37/my-motion-studio` `161414bc8e7ed45f5fc3e7a278d1759e243e33f4`; upstream `main` was verified to point to this exact commit.
+- The upstream repository was unshallowed to retain its 46-commit history. The source import is a two-parent merge commit, not a flattened archive.
+- Import commit: `c9f12d0d1d1c88095d5aed03ffd5a07aa098e6e3`.
+- Merge parents: target project checkpoint `fcdaf3df50090a3137abe837d9374b03a90c7182` and upstream source `161414bc8e7ed45f5fc3e7a278d1759e243e33f4`.
+- Push to `toonforge/stage1/source-import` completed successfully; `git ls-remote` verified the remote branch HEAD equals `c9f12d0d1d1c88095d5aed03ffd5a07aa098e6e3`.
+- The merge imported 86 paths; the resulting branch tracks 89 files total. `PROJECT_CONTEXT.md`, `ARCHITECTURE.md` and `RULES.md` each occur exactly once. No duplicate project documents were added.
+- Imported `LICENSE` Git blob ID matches the upstream source exactly. Upstream `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, README content and copyright attribution were retained.
+- The full bilingual README was preserved and edited in place rather than replaced with a shortened duplicate. Unsupported transition/export/offline claims were corrected in README and English/French UI documentation. PWA manifest branding now identifies ToonForge AI.
+- The imported GitHub Actions workflow is verification-only (typecheck, lint, test, build); it has no deployment steps. No Render service was created and no deployment was run.
+
+### 12.2 Integration verification
+
+- Existing dependency installation was reused through the same project dependency tree; package dependency manifests were compared and matched. No duplicate `npm ci` installation was run.
+- `npm run full-test` on `/tmp/toonforge-integration`: TypeScript typecheck passed, ESLint passed, 5 Vitest files passed, 89 tests passed.
+- `git diff --cached --check` passed before the import commit.
+- `npm run build` produced `dist/` successfully; Vite reported `built in 19.35s`.
+- **Build-process blocker remains:** after printing the completed build output, the Vite/Node process stayed alive. A 40-second bounded run ended with `BUILD_EXIT_CODE=124`; therefore clean build-process termination is not verified. The output bundle was 1,961.50 kB (561.24 kB gzip), and Vite emitted the >500 kB chunk warning.
+- No target-app browser load, WebGL/WebGL2 renderer, MediaRecorder MIME support, playable video export, audio export or 1–3 minute performance benchmark has been verified.
+
+### 12.3 Exact next work block
+
+1. Diagnose why `vite build` remains in the Node event loop after reporting completion; identify the active handle/plugin and make the smallest verified fix.
+2. Re-run the bounded build and require a real exit code of 0; do not hide the issue with a longer timeout or claim success based only on generated files.
+3. Then implement the Stage 1 typed domain foundation: versioned project/story/scene schemas, runtime validation, planner/provider contracts, deterministic scene-compiler boundary, persistence abstraction and bounded error handling. Reuse the existing editor model; do not duplicate its store or renderers.
+4. Add focused tests for each new contract and preserve the existing 89 passing tests.
+5. Push and verify each completed work block on the authorized repository branch before starting the next one.
+
+**Status:** Stage 1 is not complete and the project is not deployment-ready.
