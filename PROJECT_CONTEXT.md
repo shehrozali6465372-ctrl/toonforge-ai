@@ -408,7 +408,7 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 
 ### 12.6 Deterministic scene-manifest compiler — 20 November 2026
 
-**Implemented locally and verified; commit/push pending at this checkpoint.**
+**Implemented, verified, committed and pushed to GitHub on 20 November 2026.**
 
 - Added `src/domain/scene-manifest-compiler.ts`, a pure compiler boundary accepting unknown manifest input, re-validating it through `SceneManifestSchema`, and compiling into the existing editor `Project`/`Scene`/`Layer`/`Keyframe` model.
 - Determinism is explicit: caller supplies a stable millisecond timestamp and an asset-source map. The compiler performs no filesystem, network, provider or database I/O.
@@ -428,7 +428,7 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 - `npm run lint`: exit 0 after the compiler and tests were added.
 - `npm run build`: Vite transformed 2,478 modules and reported `built in 22.13s`; Workbox service-worker output remains generated. The existing 1,961.50 kB main bundle / 561.24 kB gzip warning remains; no bundle-size optimization was attempted in this work block.
 - `git diff --check`: exit 0 before the context update.
-- The implementation and tests are local and uncommitted at this checkpoint. Do not describe this block as pushed until the remote SHA and GitHub files are independently verified.
+- Compiler implementation commit: `0444a18f276cc1c1ccbaaa897c3b283d13454d0b` (`feat: compile scene manifests into editor projects`). Push to `toonforge/stage1/source-import` succeeded; `git ls-remote` verified the branch SHA equals this commit. GitHub fetches independently verified `PROJECT_CONTEXT.md`, compiler source and compiler tests.
 
 ### 12.8 Next work block — secure GLB asset packaging
 
