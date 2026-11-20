@@ -384,7 +384,7 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 
 ### 12.4 Versioned domain contracts — 20 November 2026
 
-**Implemented locally and verified; commit/push still pending at this checkpoint.**
+**Implemented, verified, committed and pushed to GitHub on 20 November 2026.**
 
 - Added direct dependency `zod@4.6.7` in `package.json` and lockfile. Runtime schema validation is isolated in `src/domain/contracts.ts`; it is not wired into the browser editor bundle or provider calls in this work block.
 - Added provider-independent `toonforge.story-plan` schema v1.0 and `toonforge.scene-manifest` schema v1.0, with generated JSON Schema exports and inferred TypeScript types.
@@ -404,7 +404,7 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 - Existing large-bundle warning remains: main JS 1,961.50 kB (561.24 kB gzip), above the 500 kB advisory threshold. This is a performance optimization item, not a build failure.
 - `git diff --check`: exit 0.
 - Local branch at verification: `stage1/source-import`, base HEAD `4efe786f6ba54b7eb479b15a8a14954963468135`; upstream branch pointed to the same HEAD before this work block was committed. `main` remained at `fcdaf3df50090a3137abe837d9374b03a90c7182`.
-- The working tree contains pending changes to `package.json`, `package-lock.json`, and new `src/domain/contracts.ts` / `src/domain/contracts.test.ts`. The changes are not yet committed or pushed at the moment this checkpoint is written.
+- Commit `d425f6893b74a34574cd1bb365af19ed84e72197` (`feat: add versioned story and scene contracts`) contains `PROJECT_CONTEXT.md`, `package.json`, `package-lock.json`, `src/domain/contracts.ts` and `src/domain/contracts.test.ts`. Push to `toonforge/stage1/source-import` succeeded; the remote branch SHA was verified equal to this commit. GitHub file fetches independently confirmed the context, implementation and test blobs on the remote branch.
 
 ### 12.6 Next work block and constraints
 
