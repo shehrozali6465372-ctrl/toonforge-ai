@@ -1,6 +1,7 @@
 export default {
   untitledProject: 'Projet sans titre',
   invalidProjectFile: 'Fichier de projet invalide',
+  projectImportTooLarge: 'Le fichier du projet dépasse la limite d’import de {{maxSize}}.',
   mobileGate: {
     title: 'Disponible sur desktop uniquement',
     desc: 'La gestion de projets est optimisée pour un grand écran. Ouvrez ToonForge AI sur un ordinateur pour créer et gérer vos projets.',

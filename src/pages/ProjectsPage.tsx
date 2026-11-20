@@ -5,8 +5,15 @@ import { useTranslation } from 'react-i18next';
 import { Plus, Search, MoreVertical, FolderOpen, Copy, Trash2, Edit3, Download, Upload, Film, Box, Square, Clock, Monitor } from 'lucide-react';
 import { db, getAllProjects, deleteProject, duplicateProject } from '@/lib/db';
 import type { Project } from '@/lib/types';
+import { uid } from '@/lib/types';
 import { NewProjectModal } from '@/components/NewProjectModal';
-import { downloadJSON, formatDuration } from '@/lib/download';
+import { downloadJSON, formatBytes, formatDuration } from '@/lib/download';
+import {
+  createProjectFileEnvelope,
+  isProjectImportSizeAllowed,
+  parseProjectImport,
+  PROJECT_IMPORT_MAX_BYTES,
+} from '@/domain/project-import';
 
 export default function ProjectsPage() {
   const { t, i18n } = useTranslation('projects');
@@ -38,26 +45,35 @@ export default function ProjectsPage() {
   };
 
   const handleExport = (p: Project) => {
-    downloadJSON(p, `${p.name.replace(/\s+/g, '-').toLowerCase()}.json`);
+    downloadJSON(createProjectFileEnvelope(p), `${p.name.replace(/\s+/g, '-').toLowerCase()}.json`);
   };
 
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.currentTarget;
+    const file = input.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      try {
-        const data = JSON.parse(ev.target?.result as string) as Project;
-        data.id = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
-        data.createdAt = Date.now();
-        data.updatedAt = Date.now();
-        await db.projects.put(data);
-      } catch {
-        alert(t('invalidProjectFile'));
+
+    try {
+      if (!isProjectImportSizeAllowed(file.size)) {
+        alert(t('projectImportTooLarge', { maxSize: formatBytes(PROJECT_IMPORT_MAX_BYTES) }));
+        return;
       }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
+
+      const fileContent: unknown = JSON.parse(await file.text());
+      const parsed = parseProjectImport(fileContent);
+      const imported: Project = {
+        ...parsed,
+        id: uid(),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      // add() fails on an ID collision instead of silently overwriting a project.
+      await db.projects.add(imported);
+    } catch {
+      alert(t('invalidProjectFile'));
+    } finally {
+      input.value = '';
+    }
   };
 
   const totalDuration = (p: Project) => p.scenes.reduce((sum, s) => sum + s.duration, 0);
@@ -88,7 +104,7 @@ export default function ProjectsPage() {
             <label className="btn-outline cursor-pointer">
               <Upload className="w-4 h-4" />
               <span className="hidden sm:inline">{t('import')}</span>
-              <input type="file" accept=".json" onChange={handleImport} className="hidden" />
+              <input type="file" accept=".json,application/json" onChange={handleImport} className="hidden" />
             </label>
             <button onClick={() => setModalOpen(true)} className="btn-primary">
               <Plus className="w-4 h-4" />
