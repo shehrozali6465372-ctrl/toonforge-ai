@@ -156,9 +156,9 @@ Scope:
 
 ## 8. Immediate next task
 
-**Continue Stage 1 with the controlled scene-manifest import UI.** The pure manifest compiler, GLB packaging boundary, manifest-import orchestration and IndexedDB metadata persistence are already implemented. Build the UI file-selection/mapping flow, call `compileManifestImport`, and persist through `saveCompiledManifestImport`; do not duplicate editor state or renderer logic.
+**Continue Stage 1 with target-browser verification of the completed import workflows.** Use RDC to launch the existing ToonForge application locally (no deployment) and verify the Projects page, versioned/legacy Project JSON import-export, manifest JSON selection, per-asset GLB mapping, validation errors, successful IndexedDB persistence and metadata round-trip. Measure actual browser memory/storage before treating the provisional import caps as production limits.
 
-The existing Project JSON import has now been hardened with a strict runtime schema, legacy raw-project compatibility, a versioned export envelope and an initial 20 MiB file-size guard. That guard is conservative but has not yet been validated against measured memory/storage limits on the intended browser client; retain this as a Stage 3 feasibility item.
+After import UI verification, continue the Stage 3 feasibility gate: target editor initialization, WebGL/WebGL2 renderer capability, short real video export, supported MIME type/file integrity and a measured 1–3 minute performance benchmark. Do not claim production readiness until these are proven on the intended client.
 
 Do not restart the project, redo already verified RDC basic-browser test, create another repository, or deploy Render before the relevant approval and feasibility evidence.
 
@@ -172,8 +172,10 @@ Do not restart the project, redo already verified RDC basic-browser test, create
 | Domain contracts and scene-manifest compiler | Implemented and tested |
 | GLB validation and packaging | Implemented and tested |
 | Manifest import orchestration and IndexedDB metadata sidecar | Implemented, migrated and tested |
-| Secure Project JSON import | Implemented; legacy and versioned formats validated |
-| Controlled manifest import UI | Pending — next work block |
+| Secure Project JSON import/export | Implemented; legacy and versioned formats validated; sidecar metadata round-trips |
+| Controlled scene-manifest import UI | Implemented and pushed; browser verification pending |
+| Project JSON import limit | 20 MiB provisional; target-browser memory/storage measurement pending |
+| Manifest import limits | 2 MiB JSON / 5 MiB per GLB / 10 MiB total; provisional pending target-browser measurement |
 | RDC basic headless browser test | Verified |
 | Target editor in RDC | Pending |
 | WebGL/WebGL2 test | Pending |
@@ -183,7 +185,7 @@ Do not restart the project, redo already verified RDC basic-browser test, create
 | GitHub repository | Exists; active branch `stage1/source-import` |
 | Render deployment | Not deployed |
 
-**Next action:** implement the controlled manifest import UI. Maintain this file as the single project context/handoff source and update it after each meaningful milestone.
+**Next action:** verify the import workflows in the target browser through RDC, then continue the WebGL/export feasibility gate. Maintain this file as the single project context/handoff source and update it after each meaningful milestone.
 
 ---
 
@@ -487,16 +489,16 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 - `git diff --check`: exit 0 before the context update.
 - Implementation commit: `1d5c34c03bc076a2b88b8969e1b23dbcc5323f5f` (`feat: persist compiled manifest metadata`). Push to `toonforge/stage1/source-import` succeeded; `git ls-remote` verified the remote branch SHA equals this commit. `main` remained unchanged at `fcdaf3df50090a3137abe837d9374b03a90c7182`.
 
-### 12.12 Next work block — secure project JSON import and controlled manifest import UI
+### 12.12 Work block plan — secure Project JSON import and controlled manifest import UI
 
-Status on 20 November: items 1 and 2 are implemented and verified in Section 12.13. The controlled manifest import UI remains pending.
+All implementation scope in this work block is now complete and verified in Sections 12.13–12.14.
 
 1. **Done:** strict runtime schema/version strategy for current Project JSON, with backward compatibility for valid legacy raw exports and rejection of malformed/unsupported files.
-2. **Done:** hardened `ProjectsPage` import with JSON parse handling, runtime validation and a visible 20 MiB size limit. The size limit is an initial conservative guard, not yet a measured target-client memory/storage acceptance limit.
-3. **Pending:** controlled scene-manifest import flow that accepts a manifest and referenced GLB files, maps each file to an asset ID, calls `compileManifestImport`, then persists via `saveCompiledManifestImport`.
-4. **Done in 12.10:** manifest metadata sidecars are retained through atomic save, duplicate, delete and reset. **Still pending:** include sidecar metadata in project JSON export/import so round-trips do not discard provenance and scene intent.
-5. Do not add provider calls or secrets to browser code. No Render service or deployment is authorized.
-6. After the next work block, update this context, commit and push only to `stage1/source-import`; verify the remote SHA and keep `main` unchanged.
+2. **Done:** hardened `ProjectsPage` import with JSON parse handling, runtime validation and a visible 20 MiB size limit. This remains a conservative provisional guard pending target-client memory/storage measurement.
+3. **Done:** controlled scene-manifest import flow accepts a manifest and referenced GLB files, maps each file to its asset ID, calls `compileManifestImport`, then persists via `saveCompiledManifestImport`.
+4. **Done:** manifest metadata sidecars are retained through atomic save, duplicate, delete, reset and versioned Project JSON export/import round-trips.
+5. No provider calls or secrets were added to browser code. No Render service or deployment was created.
+6. Both implementation and context checkpoints were committed and pushed only to `stage1/source-import`; remote SHA and unchanged `main` were verified.
 
 **Stage 1 remains in progress; no production readiness or deployment claim is made.**
 
@@ -510,7 +512,7 @@ Status on 20 November: items 1 and 2 are implemented and verified in Section 12.
 - Hardened `ProjectsPage`: checks file size before reading, uses `File.text()`, treats parsed JSON as `unknown`, validates it at runtime, assigns a new project ID/timestamps and uses `db.projects.add()` so an ID collision cannot overwrite an existing project. The input is reset after success or failure.
 - Added a visible **20 MiB** import limit and English/French error messages. This is an initial conservative guard, not a measured memory/storage acceptance limit; verify it on the intended browser client before production use.
 - Added nine focused tests covering legacy compatibility, versioned format, all layer variants, embedded asset data, unsupported versions, malformed structures, unknown fields, external URL rejection and size policy.
-- **Known limitation:** the versioned Project JSON envelope currently carries the editor `Project` only; the separate manifest/provenance sidecar is not yet exported/restored. Add this to the manifest-import/export integration work so JSON round-trips preserve metadata.
+- The original limitation that manifest/provenance sidecars were not included in Project JSON exports was resolved in Section 12.14: versioned exports now include the optional metadata sidecar, and imports validate, re-key and persist it atomically.
 
 #### Verification evidence — 20 November 2026
 
@@ -525,6 +527,34 @@ Status on 20 November: items 1 and 2 are implemented and verified in Section 12.
 - The working tree after the implementation push contained only this context-file update; context checkpoint is the remaining local write.
 - The 20 MiB import limit remains provisional pending actual target-browser memory/storage measurements.
 
-**Next work block:** controlled scene-manifest import UI and metadata-preserving Project JSON export/import. It must map manifest asset IDs to selected GLB files, call `compileManifestImport`, persist through `saveCompiledManifestImport`, and preserve existing editor renderer/store behavior. No Render deployment or provider calls are part of this block.
+**Completed in Section 12.14:** controlled scene-manifest import UI and metadata-preserving Project JSON export/import. No Render deployment or provider calls were part of this work.
+
+**Stage 1 remains in progress; no production readiness or deployment claim is made.**
+
+### 12.14 Controlled scene-manifest import UI and metadata-preserving Project JSON round-trip — 20 November 2026
+
+**Implemented, verified, committed and pushed to GitHub on 20 November 2026.**
+
+- Added `src/components/ManifestImportDialog.tsx` and wired a separate **Import scene manifest** action into `ProjectsPage`; the existing Project JSON import remains a distinct workflow.
+- The dialog validates unknown manifest JSON through `SceneManifestSchema`, identifies unique referenced GLB assets by asset ID, displays each manifest path/ID, and requires the selected local filename to match the manifest path basename. Unused assets do not require file selection.
+- Preflight reports unsupported features in English/French and blocks import rather than silently dropping them: dialogue tracks, audio cues, non-GLB scene assets and material color/roughness/metalness overrides. Only supported GLB v2 scene assets proceed to the existing compiler/packager boundary.
+- The UI checks the manifest file before reading and validates GLB filename/size/aggregate size before `arrayBuffer()`. Current provisional limits: **2 MiB manifest JSON, 5 MiB per GLB, 10 MiB total GLB bytes**. These are conservative initial limits, not measured target-browser limits. The 10 MiB raw aggregate has approximately 13.3 MiB base64 expansion, leaving headroom under the 20 MiB Project JSON import cap; target-client memory and IndexedDB quota still require direct measurement.
+- The UI maps selected `File.arrayBuffer()` data by manifest asset ID, calls `compileManifestImport` with explicit per-file/aggregate limits and a fresh `import-` project ID, then persists through `saveCompiledManifestImport`. The DB path now uses atomic Dexie `add()` writes rather than `put()` for imports, so a project-ID collision cannot overwrite an existing project or its sidecar.
+- Added `saveProjectImport` for atomic persistence of a validated Project plus optional metadata sidecar. Versioned Project JSON exports now include `ProjectManifestMetadata` when present; imports validate metadata identity/schema/path fields, re-key the project and manifest IDs, preserve asset/scene metadata and save both records atomically. Legacy raw Project JSON remains supported. Orphaned scene metadata is retained so deleting a scene does not make a later export/import fail.
+- Added `src/domain/manifest-import-ui.ts` for pure manifest preflight and explicit file-size policy. Added English/French strings for the dialog, limits, errors and unsupported features.
+- Added component tests for successful manifest-to-GLB mapping/persistence, filename mismatch rejection and unsupported-feature blocking; helper tests cover unique referenced assets, unsupported features and file-size boundaries. Project import and DB tests cover metadata round-trip/re-keying, atomic persistence, identity mismatch and duplicate-ID overwrite protection.
+- No editor renderer/store was duplicated or changed. No provider calls, secrets, Render service, deployment or external publishing action was added.
+
+#### Verification evidence — 20 November 2026
+
+- Full resource-safe Vitest run `npx vitest run --pool=threads --maxWorkers=1 --reporter=dot`: **13/13 files passed, 174/174 tests passed**.
+- `npm run typecheck`: passed (exit 0).
+- `npm run lint`: passed (exit 0).
+- `npm run build`: completed; `dist/index.html` regenerated at 15:44 local time, Vite main JS bundle `2,100,764` bytes (gzip `594,456` bytes), CSS `41,627` bytes. Workbox `dist/sw.js` is 2,046 bytes and `dist/workbox-2fbc6a65.js` is 15,026 bytes; `dist/` totals 6.0 MiB. The existing Vite 500 kB bundle advisory remains unresolved.
+- `git diff --check`: exit 0.
+- Implementation commit: `d1bf1dd0c9938ea9597af9dfa9081fa1ff036191` (`feat: add controlled scene manifest import UI`). Push to `toonforge/stage1/source-import` succeeded; `git ls-remote` confirmed remote `stage1/source-import` equals this commit. `main` remained unchanged at `fcdaf3df50090a3137abe837d9374b03a90c7182`.
+- Independent GitHub fetch verified `ManifestImportDialog.tsx` and tests, manifest import helper, Project import schema, DB persistence, ProjectsPage and both locale files on `stage1/source-import`.
+
+**Next work block:** verify the new import workflows in RDC Chromium against the actual local application, including IndexedDB persistence and export/import round-trip. Then measure target-browser memory/storage limits and proceed to WebGL/WebGL2 and real video-export feasibility. No Render deployment is authorized by this checkpoint.
 
 **Stage 1 remains in progress; no production readiness or deployment claim is made.**
