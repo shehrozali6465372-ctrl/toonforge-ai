@@ -1,10 +1,10 @@
 # ToonForge AI — Project Context & Development Order
 
-**Last updated:** 20 November 2026 (Stage 1 target-browser verification checkpoint)
+**Last updated:** 21 November 2026 (RDC WebGL and actual video-export investigation)
 **Project name:** ToonForge AI  
 **Library folder:** `/ToonForge AI`  
 **Architecture document:** `ARCHITECTURE.md`  
-**Project status:** Stage 1 — Backend ready: implementation in progress. Editor source integration, domain contracts/compiler, GLB packaging, manifest persistence and secure Project JSON import are implemented. Deployment and target-browser/WebGL/export feasibility remain pending.
+**Project status:** Stage 1 — implementation in progress. Editor source integration, domain contracts/compiler, GLB packaging, manifest persistence and secure Project JSON import are implemented. New browser evidence: WebGL2 can initialize under SwiftShader but the 3D editor loses its context; actual 2D MP4 export completes but has a timeline-duration mismatch and outputs VP9 despite the H.264 label. Production readiness and deployment remain blocked.
 
 ---
 
@@ -23,7 +23,7 @@ Target workflow:
 - **Candidate editor foundation:** `rodolphe37/my-motion-studio` (MIT-licensed, browser-based 2D/3D motion editor).
 - **Frontend technologies observed:** React 19, TypeScript, Vite, Three.js, React Three Fiber and Zustand.
 - **Hosting target:** Render Free Static Site, subject to approval and feasibility.
-- **Automation client:** Remote Desktop Commander (RDC), using headless Chromium + Puppeteer.
+- **Automation client:** Remote Desktop Commander (RDC), using headless Chromium and Chrome DevTools Protocol (CDP); no Puppeteer/Playwright dependency is installed.
 - **Rendering location:** Browser/client device, not Render.
 - **Budget target:** $0 prototype; no paid APIs or infrastructure without explicit approval.
 
@@ -36,15 +36,15 @@ The My Motion Studio repository is a candidate foundation/editor, not a complete
 - Its codebase uses a React/TypeScript/Vite/Three.js-oriented browser architecture.
 - Existing editor code includes a 3D canvas and scene/object editing capabilities.
 - Existing export code was observed using browser-side capture/MediaRecorder concepts.
-- RDC device was discovered and headless Chromium was launched with Puppeteer.
+- RDC device was discovered and headless Chromium was driven through CDP; no Puppeteer or Playwright package was installed.
 - RDC Chromium successfully navigated to `https://example.com`, returned HTTP 200, and inspected page title, URL and DOM text.
 
 ### Not yet verified
-- My Motion Studio itself has not yet been proven to load correctly in RDC Chromium.
-- WebGL/WebGL2 availability and renderer type on RDC are not yet verified.
-- Hardware acceleration is not verified; prior device inspection found no dedicated GPU and a headless ARM64 Linux environment.
-- Actual video export in RDC is not verified.
-- MP4/MOV support is not verified. Do not infer support from UI options; test actual MediaRecorder MIME support and output.
+- ToonForge Projects and editor routes have been loaded and inspected in RDC Chromium; stable 3D rendering remains unverified (see Section 12.16).
+- Minimal WebGL1/WebGL2 creation is now verified under SwiftShader in headless Chromium, but stable 3D editor rendering is not verified because the editor canvas loses its WebGL context after repeated GPU stalls.
+- Hardware acceleration is not verified; RDC is a headless ARM64 Linux container with no accessible GPU device nodes.
+- Actual 2D MP4 export is verified to complete and play, but its measured duration and codec do not match the UI/timeline contract; see Section 12.16.
+- Browser MIME capability is partially verified: generic MP4/WebM and explicit H.264 MIME report supported, QuickTime reports unsupported. The actual generic MP4 output used VP9 (`vp09`), not H.264 (`avc1`). MOV remains unimplemented.
 - 1–3 minute rendering performance is not verified.
 - Prompt-to-video automation has not been implemented.
 - The approved `shehrozali6465372-ctrl/toonforge-ai` repository is populated and active development is on `stage1/source-import`; no Render service/site has been deployed.
@@ -555,14 +555,14 @@ All implementation scope in this work block is now complete and verified in Sect
 - Implementation commit: `d1bf1dd0c9938ea9597af9dfa9081fa1ff036191` (`feat: add controlled scene manifest import UI`). Push to `toonforge/stage1/source-import` succeeded; `git ls-remote` confirmed remote `stage1/source-import` equals this commit. `main` remained unchanged at `fcdaf3df50090a3137abe837d9374b03a90c7182`.
 - Independent GitHub fetch verified `ManifestImportDialog.tsx` and tests, manifest import helper, Project import schema, DB persistence, ProjectsPage and both locale files on `stage1/source-import`.
 
-**Completed in Section 12.15:** RDC Chromium verification of Projects page, manifest import, GLB mapping, validation errors, legacy/versioned Project JSON import, metadata-preserving export/re-import and IndexedDB persistence. Baseline browser storage/heap estimates were captured. WebGL/WebGL2 and actual video export remain blocked by this headless browser environment; no Render deployment is authorized.
+**Completed in Section 12.15:** RDC Chromium verification of Projects page, manifest import, GLB mapping, validation errors, legacy/versioned Project JSON import, metadata-preserving export/re-import and IndexedDB persistence. Baseline browser storage/heap estimates were captured. The WebGL and export statements in the original 12.15 checkpoint are superseded by the additional runtime evidence in Section 12.16; no Render deployment is authorized.
 
 **Stage 1 remains in progress; no production readiness or deployment claim is made.**
 
 
 ### 12.15 RDC target-browser verification and WebGL capability checkpoint — 20 November 2026
 
-**Import workflows verified in a disposable local Chromium profile; WebGL capability is blocked by the current headless host/runtime. Stage 1 remains in progress.**
+**Import workflows verified in a disposable local Chromium profile. The original WebGL/export limitation recorded here is superseded by Section 12.16. Stage 1 remains in progress.**
 
 #### Browser and import workflow evidence
 
@@ -614,3 +614,57 @@ Captured from the disposable headless Chromium profile after the import/export c
 **Next work block:** resolve the WebGL/WebGL2 environment blocker by testing on a supported user-controlled browser/device, then verify a short real video export and measure large-file peak memory/IndexedDB quota behavior. Only after those checks should the provisional import caps be reconsidered. Do not deploy to Render or claim production readiness without the Stage 1 exit gate.
 
 **Stage 1 remains in progress; no production readiness or deployment claim is made.**
+
+
+### 12.16 RDC runtime follow-up: WebGL context loss and real MP4 export defect — 21 November 2026
+
+**This section supersedes the WebGL and export capability conclusions in the original Section 12.15. Import verification remains valid. Stage 1 is still blocked; no deployment or production-readiness claim is made.**
+
+#### Environment and minimal WebGL capability
+
+- Reconnected to the same RDC device and verified the repository remained on `stage1/source-import` with a clean worktree before testing.
+- Environment: Chromium **156.0.8078.79**, headless Linux ARM64 container. No `/dev/dri`, `/dev/kgsl-3d0`, or `/dev/mali0` device nodes were available; no hardware GPU is exposed to this container.
+- A minimal isolated test using separate canvases successfully created both WebGL 1 and WebGL 2 contexts. Reported renderer: **ANGLE / Vulkan 1.3.0 / SwiftShader**; maximum texture size **8192**. This corrects the earlier conclusion that no WebGL context could be created at all.
+- A disposable 3D Project with a box mesh and camera layer was created in the isolated Chromium profile. The actual ToonForge editor route rendered its UI and created a WebGL canvas (1096 × 609). The renderer then emitted repeated **GPU stall due to ReadPixels** warnings and subsequently **CONTEXT_LOST_WEBGL**.
+- **Conclusion:** WebGL2 capability exists in this software-rendered Chromium configuration, but the actual 3D editor does not maintain a stable context under this workload. This is not a hardware-GPU test and does not establish that the same failure occurs on a supported desktop GPU/browser. Stable 3D scene rendering remains unverified.
+
+#### MediaRecorder capability and actual output
+
+- In the same Chromium runtime, `MediaRecorder.isTypeSupported` returned:
+  - `video/mp4`: **true**
+  - `video/mp4;codecs=avc1.42E01E`: **true**
+  - `video/webm`: **true**
+  - `video/webm;codecs=vp8`: **true**
+  - `video/webm;codecs=vp9`: **true**
+  - `video/quicktime`: **false**
+- Created a disposable **2D** Project with a 1.0-second scene and exported using the actual Export Modal: MP4 format, 480p, 30 fps. The app displayed **Export complete** and Chromium downloaded `rdc-2d-export-smoke.mp4`.
+- Artifact inspection: **6,830 bytes**; recognized as an ISO Base Media MP4 file. It was served back into Chromium and loaded/played without a media error. Playback metadata reported **853 × 480**, `readyState=4`, and duration **10.9193 seconds**.
+- The Project timeline was **1.0 second** at **30 fps**, but the playable MP4 duration was approximately **10.919 seconds**. This is a confirmed output-contract failure, not just an estimate. It is consistent with the current `captureStream` + `MediaRecorder` implementation recording wall-clock render time while frame rendering is slower than the target frame budget; per-frame timing instrumentation is still needed to isolate the exact contribution.
+- MP4 box inspection found the video sample entry **`vp09`** (VP9), while the UI labels the option **MP4 (H.264)**. The generic `video/mp4` MIME accepted by the current app code did not produce the advertised H.264 codec in this Chromium runtime. The full ToonForge Export Modal has not yet been verified with an explicit H.264 MIME; the isolated explicit-H.264 MediaRecorder probe below did produce and inspect an `avc1` sample entry.
+- MOV is also exposed in the UI, while `video/quicktime` reports unsupported and the existing locale/help text says MOV conversion is not implemented. Do not treat the MOV option as a working export format.
+- `ffprobe` was not installed in this container; container/sample-entry inspection and actual Chromium playback metadata were used instead. No third-party dependency was installed.
+
+#### Production blockers opened by this test
+
+1. **3D renderer stability:** investigate the editor's repeated GPU stalls/context loss on a supported GPU/browser. Capture renderer/vendor/version and verify the imported GLB/mesh scene renders continuously, not just that a context can be created.
+2. **Video timeline duration:** the current MediaRecorder path does not preserve a 1-second timeline under slow frame rendering. Instrument per-frame render/capture times and design a deterministic timestamped encoding path. Evaluate WebCodecs plus a compatible muxer, or a controlled encoding service, against the browser-first architecture, memory, compatibility and cost before implementation. Do not hide the duration mismatch by merely changing the displayed duration.
+3. **Codec contract:** select an explicit codec MIME using `MediaRecorder.isTypeSupported`, fail clearly when unavailable, and verify the resulting file's actual sample entry. The current generic MP4 path produced VP9 despite the H.264 label.
+4. **MOV contract:** remove/disable the MOV option until a real conversion implementation exists, or implement and test the conversion path. A UI choice alone is not support.
+5. **Target-device capacity:** repeat tests on the intended client hardware, then measure 1–3 minute projects, peak memory, IndexedDB quota behavior and cancellation/recovery.
+
+#### Change, Git and cleanup status
+
+- No application source code was changed during this follow-up. No tests were rerun because this work block was runtime investigation and documentation only.
+- No Render deployment, production service change, public publishing action or user-project modification was performed. All smoke projects and downloads were confined to a disposable Chromium profile.
+- The runtime evidence is a new Stage 1 blocker register entry, not an acceptance sign-off. Resolve the export duration and codec defects before treating video export as production-capable.
+- Gracefully closed the disposable Chromium instance, stopped the Vite and media test servers, removed the temporary browser profile/download directory and verified that no test processes or listeners remained on ports 4173, 4174 or 9222. The repository and branch state were preserved.
+
+**Next work block:** reproduce stable 3D rendering on a supported GPU/browser; design a deterministic export correction with a regression test for timeline duration and codec selection; then verify real MP4 and WebM artifacts and playback. Keep the current provisional import limits unchanged. Do not deploy to Render or claim Stage 1 completion.
+
+
+#### Additional codec/encoder feasibility probe — 21 November 2026
+
+- An isolated explicit-MIME `MediaRecorder` test using `video/mp4;codecs=avc1.42E01E` successfully produced a **5,112-byte MP4**. Chromium reported its negotiated MIME as `video/mp4;codecs=avc1.420015`; the MP4 video sample entry was **`avc1`**. This proves the current Chromium runtime can produce H.264 when the codec is explicitly requested. It does not yet prove the app's full export flow uses this explicit path.
+- WebCodecs `VideoEncoder.isConfigSupported` returned supported for H.264 (`avc1.42001E`, `avc1.42E01E`), VP9 (`vp09.00.10.08`) and VP8 (`vp8`) at 640 × 360 / 30 fps.
+- A five-frame WebCodecs H.264 encode completed with **5 encoded chunks**, **1,912 bytes**, codec metadata `avc1.42E01E`, a 33-byte decoder configuration description and no encoder errors. This was an encoder-only probe; no MP4 container/muxer was produced.
+- Repository dependency/source inspection found no existing `mp4-muxer`, `webm-muxer`, `mp4box.js`, `mp4box`, `webm-writer` or `@webav/av-cliper` dependency/reference. A deterministic WebCodecs implementation would therefore need an evaluated muxer dependency or a deliberately implemented container writer; do not assume this capability is already present.
