@@ -406,12 +406,37 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 - Local branch at verification: `stage1/source-import`, base HEAD `4efe786f6ba54b7eb479b15a8a14954963468135`; upstream branch pointed to the same HEAD before this work block was committed. `main` remained at `fcdaf3df50090a3137abe837d9374b03a90c7182`.
 - Commit `d425f6893b74a34574cd1bb365af19ed84e72197` (`feat: add versioned story and scene contracts`) contains `PROJECT_CONTEXT.md`, `package.json`, `package-lock.json`, `src/domain/contracts.ts` and `src/domain/contracts.test.ts`. Push to `toonforge/stage1/source-import` succeeded; the remote branch SHA was verified equal to this commit. GitHub file fetches independently confirmed the context, implementation and test blobs on the remote branch.
 
-### 12.6 Next work block and constraints
+### 12.6 Deterministic scene-manifest compiler — 20 November 2026
 
-1. Review the implemented schemas for compatibility with the existing scene/layer type model and explicitly document supported vs unsupported manifest features.
-2. Design and implement a pure, typed, deterministic adapter/compiler from validated `SceneManifest` to existing `Project`/scene/layer structures. Do not duplicate the Zustand store, renderers, or animation engine. Reject unsupported features rather than silently dropping them.
-3. Add adapter tests first, including stable ID mapping, timing/keyframe conversion, asset references, provenance propagation and unsupported-feature rejection.
-4. Continue keeping API credentials and provider calls server-side; do not create Render resources or deploy without explicit authorization.
-5. Commit/push only after final verification; push only to `stage1/source-import`, verify GitHub remote SHA and keep `main` unchanged.
+**Implemented locally and verified; commit/push pending at this checkpoint.**
+
+- Added `src/domain/scene-manifest-compiler.ts`, a pure compiler boundary accepting unknown manifest input, re-validating it through `SceneManifestSchema`, and compiling into the existing editor `Project`/`Scene`/`Layer`/`Keyframe` model.
+- Determinism is explicit: caller supplies a stable millisecond timestamp and an asset-source map. The compiler performs no filesystem, network, provider or database I/O.
+- Project resolution, frame rate, title, ID and timestamps map to the existing `Project` model. Scene IDs, order, duration and solid backgrounds map to existing `Scene` objects.
+- Each supported manifest object maps to an existing imported `MeshLayer`; transforms and supported opacity material values are retained. The scene camera maps to a `Camera3DLayer`. Camera `shotType` and `storySceneId` are retained in a separate `sceneMetadata` sidecar because the legacy `Scene` type has no fields for them.
+- Animation cue seconds, vector/numeric values and snake_case easing names map to existing seconds-based `Keyframe` structures with stable IDs. Duplicate target/property channels and camera/object layer-ID collisions are rejected.
+- Asset provenance, kind, path and format are preserved in a separate `assetMetadata` sidecar; the legacy `Project` model has no provenance field. The caller must persist this sidecar separately if provenance must survive reload/export.
+- Current supported model source is GLB v2 only, supplied as a `data:model/gltf-binary;base64,` URL. The compiler checks base64 shape, GLB magic, version, declared file length and first JSON chunk header. It does **not** inspect the full GLB JSON for external buffer/image URIs; the upstream packager must verify all resources are embedded before supplying a source.
+- Standalone `.gltf` is rejected because external buffer/texture dependency packaging is not implemented. Dialogue/audio cues are rejected because the editor has no voice/audio track or renderer. Material color/roughness/metalness overrides are rejected because the current imported-mesh renderer cannot apply them; opacity is supported.
+- This compiler is not yet wired into the UI, import flow, IndexedDB persistence or a backend. No provider call, API secret, new store, renderer, service or deployment was introduced.
+
+### 12.7 Verification evidence — 20 November 2026
+
+- Focused compiler tests: **16/16 passed**.
+- Full resource-safe Vitest run `npx vitest run --pool=threads --maxWorkers=1`: **7/7 files passed, 129/129 tests passed** (89 existing editor tests + 24 contract tests + 16 compiler tests).
+- `npm run typecheck`: exit 0 after the compiler and tests were added.
+- `npm run lint`: exit 0 after the compiler and tests were added.
+- `npm run build`: Vite transformed 2,478 modules and reported `built in 22.13s`; Workbox service-worker output remains generated. The existing 1,961.50 kB main bundle / 561.24 kB gzip warning remains; no bundle-size optimization was attempted in this work block.
+- `git diff --check`: exit 0 before the context update.
+- The implementation and tests are local and uncommitted at this checkpoint. Do not describe this block as pushed until the remote SHA and GitHub files are independently verified.
+
+### 12.8 Next work block — secure GLB asset packaging
+
+1. Implement a pure GLB packager/validator that accepts uploaded bytes, verifies the GLB v2 container and JSON chunk, and rejects external buffer/image URI references before producing a data URL for the compiler.
+2. Add explicit asset-size limits and malformed/truncated-file tests based on a documented product limit; do not invent a limit without recording its memory/storage rationale.
+3. Keep file access and packaging separate from the pure compiler. The compiler should receive only already validated, self-contained data URLs.
+4. Design durable persistence for the compiler's `assetMetadata` and `sceneMetadata` sidecars; the existing IndexedDB schema currently persists only `Project`.
+5. Keep provider calls and credentials server-side. No Render service or deployment is authorized at this checkpoint.
+6. After verification, update this context, commit and push only to `stage1/source-import`; verify the remote SHA and keep `main` unchanged.
 
 **Stage 1 remains in progress; no production readiness or deployment claim is made.**
