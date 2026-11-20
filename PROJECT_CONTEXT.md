@@ -382,13 +382,36 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 - **Deployment/security boundary:** the current target is a static browser application; no backend API exists. Provider interfaces may be defined, but API secrets and authenticated model calls must not be placed in browser code. A real provider call requires an explicitly selected and approved server-side endpoint/hosting design.
 - **CI trigger limitation:** `.github/workflows/ci.yml` runs on pushes to `main` and pull requests targeting `main`; pushing `stage1/source-import` alone does not trigger GitHub Actions. The 89-test and production-build evidence in Section 12.2 is local RDC evidence, not a GitHub Actions result.
 
-### 12.4 Exact next work block — versioned domain contracts
+### 12.4 Versioned domain contracts — 20 November 2026
 
-1. Define a versioned, runtime-validated ToonForge story/scene-manifest contract that is separate from the imported editor `Project` model. Keep the manifest provider-independent and deterministic.
-2. Specify scene timing, shots/camera intent, character/prop/environment asset references, animation cues, dialogue/audio intent, provenance/license fields and validation limits. Explicitly define which manifest features map to existing editor layers/keyframes and which are unsupported until a later renderer upgrade.
-3. Select a maintained runtime validator and add it as a direct dependency only after comparing bundle impact, schema ergonomics and server/client boundaries. Do not rely on transitive packages.
-4. Define a typed compiler/adapter boundary from validated manifest to existing `Project`/`Scene`/`Layer` structures. Do not duplicate the Zustand store, Konva renderer, Three.js renderer or animation engine.
-5. Add failing contract tests first, then implement schema validation and adapter tests. Preserve the 89 existing tests and clean build.
-6. Complete this work block, update this context file, commit and push to `stage1/source-import`, then verify the remote branch before starting the next work block.
+**Implemented locally and verified; commit/push still pending at this checkpoint.**
 
-**Status:** Stage 1 is not complete and the project is not deployment-ready. No Render service or deployment is authorized at this checkpoint.
+- Added direct dependency `zod@4.6.7` in `package.json` and lockfile. Runtime schema validation is isolated in `src/domain/contracts.ts`; it is not wired into the browser editor bundle or provider calls in this work block.
+- Added provider-independent `toonforge.story-plan` schema v1.0 and `toonforge.scene-manifest` schema v1.0, with generated JSON Schema exports and inferred TypeScript types.
+- Story-plan validation covers strict object shapes, identifier uniqueness, scene-duration totals, referenced characters/locations/scenes, dialogue timing and required narrative beat ordering.
+- Scene-manifest validation covers strict shapes, project/scene timing, asset path traversal and kind/format mapping, provenance/license metadata, scene object references, animation cue targets/value shapes/keyframe ordering, dialogue speaker references and audio asset/timing references.
+- `getProductionReadinessIssues` reports assets whose provenance is unverified, commercial use is restricted/unknown, or whose license identifier is unknown. This is a readiness gate, not a legal determination or a substitute for license review.
+- **Not implemented in this block:** manifest-to-editor compiler/adapter, provider orchestration, persistence/API, browser export/audio changes, or new rendering capabilities. Do not treat a validated manifest as directly renderable by the current editor.
+- Existing editor `Project`/Zustand store/renderers remain unchanged. No parallel store, provider secrets, service, deployment, or publishing path was added.
+
+### 12.5 Verification evidence — 20 November 2026
+
+- `npm run typecheck`: exit 0.
+- `npm run lint`: exit 0.
+- Initial parallel/default Vitest run: all existing 89 tests passed, but Vitest could not start the new test file's fork worker (worker startup timeout). This was an execution/pool startup failure, not an assertion failure.
+- Resource-safe rerun `npx vitest run --pool=threads --maxWorkers=1`: **6 test files passed, 113/113 tests passed**, including 24 new domain-contract tests.
+- `npm run build`: exit 0; Vite transformed 2,478 modules and completed in 23.69s. Workbox generated `dist/sw.js` (2,046 bytes) and `dist/workbox-2fbc6a65.js` (15,026 bytes).
+- Existing large-bundle warning remains: main JS 1,961.50 kB (561.24 kB gzip), above the 500 kB advisory threshold. This is a performance optimization item, not a build failure.
+- `git diff --check`: exit 0.
+- Local branch at verification: `stage1/source-import`, base HEAD `4efe786f6ba54b7eb479b15a8a14954963468135`; upstream branch pointed to the same HEAD before this work block was committed. `main` remained at `fcdaf3df50090a3137abe837d9374b03a90c7182`.
+- The working tree contains pending changes to `package.json`, `package-lock.json`, and new `src/domain/contracts.ts` / `src/domain/contracts.test.ts`. The changes are not yet committed or pushed at the moment this checkpoint is written.
+
+### 12.6 Next work block and constraints
+
+1. Review the implemented schemas for compatibility with the existing scene/layer type model and explicitly document supported vs unsupported manifest features.
+2. Design and implement a pure, typed, deterministic adapter/compiler from validated `SceneManifest` to existing `Project`/scene/layer structures. Do not duplicate the Zustand store, renderers, or animation engine. Reject unsupported features rather than silently dropping them.
+3. Add adapter tests first, including stable ID mapping, timing/keyframe conversion, asset references, provenance propagation and unsupported-feature rejection.
+4. Continue keeping API credentials and provider calls server-side; do not create Render resources or deploy without explicit authorization.
+5. Commit/push only after final verification; push only to `stage1/source-import`, verify GitHub remote SHA and keep `main` unchanged.
+
+**Stage 1 remains in progress; no production readiness or deployment claim is made.**
