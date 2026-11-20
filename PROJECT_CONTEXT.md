@@ -432,7 +432,7 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 
 ### 12.8 Secure GLB asset packager — 20 November 2026
 
-**Implemented locally and verified; commit/push pending at this checkpoint.**
+**Implemented, verified, committed and pushed to GitHub on 20 November 2026.**
 
 - Added `src/domain/glb-asset-packager.ts`, a pure byte-input validator/packager that accepts `ArrayBuffer` or `Uint8Array` and returns the exact compiler-compatible `data:model/gltf-binary;base64,` URL plus original byte length.
 - Validates GLB magic, version 2, declared file length, 4-byte total/chunk alignment, chunk boundaries, JSON-first ordering, exactly one JSON chunk, UTF-8/JSON parsing and `asset.version === "2.0"`.
@@ -453,7 +453,7 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 - `npm run build`: exit 0; Vite transformed 2,478 modules and completed in 21.04s. Workbox generated `dist/sw.js` (2,046 bytes) and `dist/workbox-2fbc6a65.js` (15,026 bytes); PWA precache remains 18 entries / 2,804.85 KiB.
 - Existing large-bundle warning remains: main JS 1,961.50 kB (561.24 kB gzip), above Vite's 500 kB advisory threshold.
 - `git diff --check`: exit 0 before the context update.
-- Packager implementation and tests are local and uncommitted at this checkpoint.
+- Packager commit: `2b07500b3d5432989a6397269df489ff9542c8d1` (`feat: validate and package self-contained GLB assets`). Push to `toonforge/stage1/source-import` succeeded; `git ls-remote` verified the remote branch SHA equals this commit. GitHub fetches independently verified the context, packager source, packager tests and compiler-to-packager test integration.
 
 ### 12.10 Next work block — manifest import orchestration and durable metadata
 
