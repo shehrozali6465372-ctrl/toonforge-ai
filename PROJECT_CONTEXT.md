@@ -457,7 +457,7 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 
 ### 12.10 Manifest import orchestration and durable metadata — 20 November 2026
 
-**Implemented locally and verified; commit/push pending at this checkpoint.**
+**Implemented, verified, committed and pushed to GitHub on 20 November 2026.**
 
 - Added `src/domain/manifest-import.ts` with a pure `compileManifestImport` orchestration boundary. It validates unknown manifest input, resolves each unique referenced GLB asset ID to caller-supplied bytes, packages each asset once, invokes the scene compiler and returns the compiled `Project`, metadata sidecars and total raw asset bytes.
 - Requires explicit caller-provided `maxAssetBytes` and `maxTotalAssetBytes` limits. No product-wide cap is selected implicitly. Both limits are checked before data-URL encoding; duplicate references to the same asset count once.
@@ -479,7 +479,7 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 - `npm run build`: exit 0; Vite transformed 2,478 modules and completed in 21.13s. Workbox generated `dist/sw.js` (2,046 bytes) and `dist/workbox-2fbc6a65.js` (15,026 bytes); PWA precache: 18 entries / 2,805.60 KiB.
 - Main JS bundle is now 1,962.25 kB (561.44 kB gzip), still above the 500 kB advisory threshold. No bundle-size optimization was attempted in this block.
 - `git diff --check`: exit 0 before the context update.
-- Orchestration, metadata and DB migration implementation are local and uncommitted at this checkpoint.
+- Implementation commit: `1d5c34c03bc076a2b88b8969e1b23dbcc5323f5f` (`feat: persist compiled manifest metadata`). Push to `toonforge/stage1/source-import` succeeded; `git ls-remote` verified the remote branch SHA equals this commit. `main` remained unchanged at `fcdaf3df50090a3137abe837d9374b03a90c7182`.
 
 ### 12.12 Next work block — secure project JSON import and controlled manifest import UI
 
