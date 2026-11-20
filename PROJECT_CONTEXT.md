@@ -455,13 +455,39 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 - `git diff --check`: exit 0 before the context update.
 - Packager commit: `2b07500b3d5432989a6397269df489ff9542c8d1` (`feat: validate and package self-contained GLB assets`). Push to `toonforge/stage1/source-import` succeeded; `git ls-remote` verified the remote branch SHA equals this commit. GitHub fetches independently verified the context, packager source, packager tests and compiler-to-packager test integration.
 
-### 12.10 Next work block — manifest import orchestration and durable metadata
+### 12.10 Manifest import orchestration and durable metadata — 20 November 2026
 
-1. Design a typed orchestration boundary that takes a validated manifest plus already packaged assets, calls the compiler, and returns a complete import result without side effects.
-2. Persist `assetMetadata` and `sceneMetadata` alongside the editor project. Inspect Dexie versioning and implement a backward-compatible migration from database version 1; do not mutate or drop existing projects.
-3. Decide and document the product-level GLB size cap using measured memory expansion (raw bytes, base64 string, decoded loader copy) and IndexedDB quota constraints before wiring a UI file picker.
-4. Harden project JSON import with runtime validation, size checks and schema/version handling; the existing `ProjectsPage` import currently performs a JSON parse and TypeScript cast only.
-5. Keep provider credentials and model calls server-side. No Render service or deployment is authorized.
+**Implemented locally and verified; commit/push pending at this checkpoint.**
+
+- Added `src/domain/manifest-import.ts` with a pure `compileManifestImport` orchestration boundary. It validates unknown manifest input, resolves each unique referenced GLB asset ID to caller-supplied bytes, packages each asset once, invokes the scene compiler and returns the compiled `Project`, metadata sidecars and total raw asset bytes.
+- Requires explicit caller-provided `maxAssetBytes` and `maxTotalAssetBytes` limits. No product-wide cap is selected implicitly. Both limits are checked before data-URL encoding; duplicate references to the same asset count once.
+- Added `src/domain/metadata.ts` defining `ProjectManifestMetadata`, keyed by project ID, for manifest identity/schema version, asset provenance and scene metadata.
+- Upgraded Dexie `MotionStudioDB` from version 1 to version 2 additively. The existing `projects` store/indexes remain unchanged; new `projectMetadata` store is added. No existing projects are rewritten or dropped.
+- Added atomic `saveCompiledManifestImport` transaction to persist the editor Project and its metadata sidecar together; it rejects a manifest/project ID mismatch before writing.
+- Added `getProjectManifestMetadata`; project deletion and database reset now remove sidecars in the same transaction.
+- `duplicateProject` now clones the metadata sidecar, assigns the copied manifest the new project ID, and remaps scene metadata keys to the copied scene IDs. Asset provenance keys remain stable because the copied model layers still refer to the same embedded model data.
+- Added a real version-1-to-version-2 Dexie migration test with a populated legacy project. It verifies the project survives byte-for-byte and the new metadata store is empty after upgrade.
+- **Not implemented:** UI/file-picker wiring, product-level asset size policy, secure Project JSON import validation, backend persistence or provider orchestration. `ProjectsPage` still parses imported JSON and casts it to `Project`; that remains a separate security task.
+- No project renderer/store duplication, provider secrets, deployment or Render resource was added.
+
+### 12.11 Verification evidence — 20 November 2026
+
+- Focused import orchestration + DB/migration suites: **17/17 tests passed**.
+- Full resource-safe Vitest run `npx vitest run --pool=threads --maxWorkers=1`: **10/10 files passed, 151/151 tests passed**.
+- `npm run typecheck`: exit 0 after orchestration, metadata and DB migration changes.
+- `npm run lint`: exit 0 after orchestration, metadata and DB migration changes.
+- `npm run build`: exit 0; Vite transformed 2,478 modules and completed in 21.13s. Workbox generated `dist/sw.js` (2,046 bytes) and `dist/workbox-2fbc6a65.js` (15,026 bytes); PWA precache: 18 entries / 2,805.60 KiB.
+- Main JS bundle is now 1,962.25 kB (561.44 kB gzip), still above the 500 kB advisory threshold. No bundle-size optimization was attempted in this block.
+- `git diff --check`: exit 0 before the context update.
+- Orchestration, metadata and DB migration implementation are local and uncommitted at this checkpoint.
+
+### 12.12 Next work block — secure project JSON import and controlled manifest import UI
+
+1. Define a strict runtime schema/version strategy for the existing editor `Project` JSON format. Preserve backward compatibility for valid legacy project exports; reject malformed or unsupported data before IndexedDB writes.
+2. Harden `ProjectsPage` import with a caller-visible file-size limit selected from measured memory/storage constraints, JSON parse error handling and runtime validation. Do not use a TypeScript cast as validation.
+3. Design a controlled scene-manifest import flow that accepts a manifest and its referenced GLB files, maps each file to an asset ID, calls `compileManifestImport`, then persists via `saveCompiledManifestImport`.
+4. Keep the manifest metadata sidecar attached to project lifecycle operations (save, duplicate, delete, reset). Add UI and integration tests without changing existing editor renderer/store behavior.
+5. Do not add provider calls or secrets to browser code. No Render service or deployment is authorized.
 6. After verification, update this context, commit and push only to `stage1/source-import`; verify the remote SHA and keep `main` unchanged.
 
 **Stage 1 remains in progress; no production readiness or deployment claim is made.**
