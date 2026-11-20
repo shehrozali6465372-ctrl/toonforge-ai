@@ -111,7 +111,7 @@ export default function ProjectsPage() {
             </label>
             <button type="button" onClick={() => setManifestImportOpen(true)} className="btn-outline">
               <FileUp className="w-4 h-4" />
-              <span className="hidden sm:inline">{t('importManifest')}</span>
+              <span className="hidden sm:inline">{t('manifestImport')}</span>
             </button>
             <button onClick={() => setModalOpen(true)} className="btn-primary">
               <Plus className="w-4 h-4" />

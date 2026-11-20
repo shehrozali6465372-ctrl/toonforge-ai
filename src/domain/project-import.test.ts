@@ -75,6 +75,8 @@ describe('parseProjectImport', () => {
 
   it('round-trips manifest/provenance sidecar metadata in the versioned envelope', () => {
     const project = createProject('Project with provenance', '3d', '16:9');
+    // Editor-generated scene IDs may begin with a digit; metadata must preserve them.
+    project.scenes[0].id = '1scene';
     const metadata = makeMetadata(project);
     const envelope = createProjectFileEnvelope(project, metadata);
 

@@ -1,6 +1,6 @@
 # ToonForge AI — Project Context & Development Order
 
-**Last updated:** 20 November 2026 (Stage 1 implementation checkpoint)
+**Last updated:** 20 November 2026 (Stage 1 target-browser verification checkpoint)
 **Project name:** ToonForge AI  
 **Library folder:** `/ToonForge AI`  
 **Architecture document:** `ARCHITECTURE.md`  
@@ -555,6 +555,62 @@ All implementation scope in this work block is now complete and verified in Sect
 - Implementation commit: `d1bf1dd0c9938ea9597af9dfa9081fa1ff036191` (`feat: add controlled scene manifest import UI`). Push to `toonforge/stage1/source-import` succeeded; `git ls-remote` confirmed remote `stage1/source-import` equals this commit. `main` remained unchanged at `fcdaf3df50090a3137abe837d9374b03a90c7182`.
 - Independent GitHub fetch verified `ManifestImportDialog.tsx` and tests, manifest import helper, Project import schema, DB persistence, ProjectsPage and both locale files on `stage1/source-import`.
 
-**Next work block:** verify the new import workflows in RDC Chromium against the actual local application, including IndexedDB persistence and export/import round-trip. Then measure target-browser memory/storage limits and proceed to WebGL/WebGL2 and real video-export feasibility. No Render deployment is authorized by this checkpoint.
+**Completed in Section 12.15:** RDC Chromium verification of Projects page, manifest import, GLB mapping, validation errors, legacy/versioned Project JSON import, metadata-preserving export/re-import and IndexedDB persistence. Baseline browser storage/heap estimates were captured. WebGL/WebGL2 and actual video export remain blocked by this headless browser environment; no Render deployment is authorized.
+
+**Stage 1 remains in progress; no production readiness or deployment claim is made.**
+
+
+### 12.15 RDC target-browser verification and WebGL capability checkpoint — 20 November 2026
+
+**Import workflows verified in a disposable local Chromium profile; WebGL capability is blocked by the current headless host/runtime. Stage 1 remains in progress.**
+
+#### Browser and import workflow evidence
+
+- Started the existing Vite app locally at `http://127.0.0.1:4173` through RDC. No deployment or Render resource was created.
+- Chromium 156.0.8078.79 was driven through the Chrome DevTools Protocol using Node 22's built-in WebSocket API. The repository does not have `puppeteer`, `puppeteer-core`, `playwright` or `playwright-core` installed; no browser dependency was added.
+- Verified the Projects page renders at a 1440 px viewport and exposes separate Project JSON import and **Import scene manifest** actions.
+- Manifest import: selected an 837-byte valid scene manifest, mapped its referenced `assets/characters/hero.glb` asset to a 52-byte valid GLB v2 file, confirmed the import action became enabled, and imported successfully.
+- IndexedDB verification: `MotionStudioDB` contains both `projects` and `projectMetadata` stores. The manifest import created one Project with `mesh` and `camera3d` layers; the metadata sidecar retained manifest identity, asset ID `hero`, and scene ID `scene-one`. Project ID and manifest ID matched.
+- Negative UI cases verified: invalid manifest schema displayed a validation error and kept import disabled; dialogue-bearing manifest displayed an unsupported-feature error and disabled both asset selection and import; mismatched GLB filename displayed the expected filename error and kept import disabled.
+- Legacy raw Project JSON import succeeded and created a new Project without an invented metadata sidecar.
+- Versioned `toonforge.project` schema `1.0` JSON import succeeded and re-keyed both Project and metadata identity.
+- Exported the manifest-backed Project through the Projects card's **Export JSON** action. The downloaded 2,984-byte file contained the versioned envelope and metadata sidecar (asset ID `hero`). Re-importing that exact downloaded file created another Project with a new ID and a matching re-keyed metadata sidecar.
+- After browser reload, the isolated test profile retained four Projects and three metadata sidecars in IndexedDB. No console error entries were observed during the Projects page reload. All test data was created in a disposable Chromium profile; no user project data was touched.
+- Temporary Chromium profiles, test files, downloads and the local Vite server were closed/cleaned up after verification.
+
+#### Baseline browser storage and heap observation
+
+Captured from the disposable headless Chromium profile after the import/export checks; this is a baseline observation, not a production capacity test or a guarantee for other devices:
+
+- `navigator.storage.estimate()`: usage **362,227 bytes**; reported quota **10,737,780,467 bytes**.
+- Reported usage details: caches **3,840 bytes**, IndexedDB **17,118 bytes**, service-worker registrations **341,269 bytes**.
+- `performance.memory`: JS heap used **76,354,816 bytes**, total **78,152,492 bytes**, heap limit **2,104,492,032 bytes**.
+- These measurements do not establish safe maximum import sizes. Large-file peak memory, base64 expansion, actual browser/device IndexedDB quota and quota-exhaustion recovery remain untested. Keep the 2 MiB manifest / 5 MiB per-GLB / 10 MiB aggregate GLB / 20 MiB Project JSON caps provisional.
+
+#### WebGL/WebGL2 blocker discovered
+
+- Tested the actual 3D editor route in a second headless Chromium launch with `--enable-unsafe-swiftshader`, `--use-gl=angle` and `--use-angle=swiftshader`; the 3D editor loaded its UI, but no WebGL or WebGL2 context could be created.
+- Chromium's `chrome://gpu` report explicitly showed **OpenGL: Disabled**, **WebGL: Disabled**, **WebGPU: Disabled**, and **GPU process was unable to boot: GPU process crashed too many times with software GL**. The GPU device identifiers were zero/unknown and the renderer fell back to software-only mode. WebGL was reported disabled via blocklist or command-line policy even with the SwiftShader attempt.
+- The earlier smoke browser was explicitly launched with `--disable-gpu`; it is not used as evidence of WebGL capability. The separate SwiftShader attempt without `--disable-gpu` also failed, so this is a real limitation of the current headless host/runtime rather than proof that the application itself is incompatible.
+- **Impact:** WebGL/WebGL2 scene rendering and actual browser video export cannot be accepted as verified on this RDC Chromium host. Do not proceed to claim 3D runtime readiness, video-export readiness or Stage 1 completion based only on the successful import tests.
+- **Required next action:** repeat WebGL/WebGL2 and media capability tests on a supported user-controlled browser/device with working GPU or a validated software WebGL runtime. Capture renderer/vendor/version, `MediaRecorder.isTypeSupported` results, a short real export artifact and playback/integrity evidence before deciding the rendering architecture.
+
+#### Code correction discovered during this checkpoint
+
+- The full-suite run exposed a schema compatibility bug: `sceneMetadata` record keys were validated with the manifest asset-ID regex, but the existing editor `uid()` generator can produce scene IDs beginning with digits.
+- Added a deterministic regression case using scene ID `1scene`; it failed before the fix and passed after changing only the `sceneMetadata` record-key schema to accept non-empty editor IDs (max 128 chars). Manifest asset IDs and optional `storySceneId` retain their strict manifest-ID validation.
+- Corrected the Projects page translation reference from `importManifest` to the existing locale key `manifestImport`; both English and French locale dictionaries already define that key.
+
+#### Verification evidence — 20 November 2026
+
+- Focused Project import suite: **12/12 tests passed** after the regression fix.
+- Full resource-safe Vitest run: **13/13 files passed, 174/174 tests passed**.
+- `npm run typecheck`: passed (exit 0).
+- `npm run lint`: passed (exit 0).
+- `npm run build`: passed (exit 0); Vite transformed 2,580 modules. Main JS bundle approximately **2,100.78 kB** (gzip **600.76 kB**); the existing 500 kB chunk advisory remains unresolved. Workbox generated the service worker and precache.
+- `git diff --check`: passed before this context update.
+- At the start of this work block, local HEAD and `toonforge/stage1/source-import` both matched `8dbf400a20b33de69babdd431f97d4f152c841f2`; `main` was not checked out or modified. The code and context changes from this work block still require a commit and push to the continuation branch.
+
+**Next work block:** resolve the WebGL/WebGL2 environment blocker by testing on a supported user-controlled browser/device, then verify a short real video export and measure large-file peak memory/IndexedDB quota behavior. Only after those checks should the provisional import caps be reconsidered. Do not deploy to Render or claim production readiness without the Stage 1 exit gate.
 
 **Stage 1 remains in progress; no production readiness or deployment claim is made.**

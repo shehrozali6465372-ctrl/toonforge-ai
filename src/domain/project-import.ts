@@ -265,7 +265,9 @@ const ProjectManifestMetadataSchema = z.strictObject({
       verified: z.boolean(),
     }),
   })),
-  sceneMetadata: z.record(MetadataAssetIdSchema, z.strictObject({
+  // Scene keys are existing editor scene IDs (uid()), not manifest asset IDs.
+  // The editor's uid() may begin with a digit, so do not apply MetadataAssetIdSchema here.
+  sceneMetadata: z.record(z.string().min(1).max(128), z.strictObject({
     storySceneId: MetadataAssetIdSchema.optional(),
     shotType: z.enum(['establishing', 'wide', 'medium', 'close_up', 'over_the_shoulder']),
   })),
