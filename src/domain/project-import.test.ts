@@ -10,7 +10,31 @@ import {
   createText3DLayer,
   createTextLayer,
 } from '@/lib/factories';
-import { isProjectImportSizeAllowed, parseProjectImport, ProjectImportError, PROJECT_IMPORT_MAX_BYTES } from './project-import';
+import type { ProjectManifestMetadata } from './metadata';
+import {
+  createProjectFileEnvelope,
+  isProjectImportSizeAllowed,
+  parseProjectImport,
+  parseProjectImportBundle,
+  ProjectImportError,
+  rekeyProjectImportBundle,
+  PROJECT_IMPORT_MAX_BYTES,
+} from './project-import';
+
+function makeMetadata(project: ReturnType<typeof createProject>): ProjectManifestMetadata {
+  return {
+    projectId: project.id,
+    manifest: { id: project.id, schemaVersion: '1.0' },
+    assetMetadata: {
+      hero: {
+        kind: 'character', path: 'assets/characters/hero.glb', format: 'glb',
+        provenance: { source: 'generated', licenseId: 'generated', commercialUse: 'allowed', verified: true },
+      },
+    },
+    sceneMetadata: { [project.scenes[0].id]: { shotType: 'wide' } },
+    updatedAt: project.updatedAt,
+  };
+}
 
 describe('parseProjectImport', () => {
   it('accepts a valid legacy raw Project export without changing optional fields', () => {
@@ -47,6 +71,48 @@ describe('parseProjectImport', () => {
     ];
 
     expect(parseProjectImport(project)).toEqual(project);
+  });
+
+  it('round-trips manifest/provenance sidecar metadata in the versioned envelope', () => {
+    const project = createProject('Project with provenance', '3d', '16:9');
+    const metadata = makeMetadata(project);
+    const envelope = createProjectFileEnvelope(project, metadata);
+
+    expect(parseProjectImportBundle(envelope)).toEqual({ project, metadata });
+    expect(parseProjectImport(envelope)).toEqual(project);
+  });
+
+  it('rejects metadata identity mismatches and preserves sidecars for scenes later removed from the editor', () => {
+    const project = createProject('Mismatched metadata', '3d', '16:9');
+    const metadata = makeMetadata(project);
+    expect(() => parseProjectImportBundle({
+      ...createProjectFileEnvelope(project),
+      metadata: { ...metadata, manifest: { ...metadata.manifest, id: 'another-project' } },
+    })).toThrowError(ProjectImportError);
+    const staleSceneMetadata = { 'missing-scene': { shotType: 'wide' as const } };
+    const parsed = parseProjectImportBundle({
+      ...createProjectFileEnvelope(project),
+      metadata: { ...metadata, sceneMetadata: staleSceneMetadata },
+    });
+    expect(parsed.metadata?.sceneMetadata).toEqual(staleSceneMetadata);
+  });
+
+  it('rekeys imported Projects without losing or mutating manifest sidecars', () => {
+    const project = createProject('Rekey project', '3d', '16:9');
+    const metadata = makeMetadata(project);
+    const bundle = parseProjectImportBundle(createProjectFileEnvelope(project, metadata));
+    const importedAt = 1_800_000_000_123;
+    const rekeyed = rekeyProjectImportBundle(bundle, 'import-new-project', importedAt);
+
+    expect(rekeyed.project.id).toBe('import-new-project');
+    expect(rekeyed.project.createdAt).toBe(importedAt);
+    expect(rekeyed.project.updatedAt).toBe(importedAt);
+    expect(rekeyed.metadata?.projectId).toBe('import-new-project');
+    expect(rekeyed.metadata?.manifest.id).toBe('import-new-project');
+    expect(rekeyed.metadata?.assetMetadata).toEqual(metadata.assetMetadata);
+    expect(rekeyed.metadata?.sceneMetadata).toEqual(metadata.sceneMetadata);
+    expect(project.id).not.toBe(rekeyed.project.id);
+    expect(metadata.manifest.id).toBe(project.id);
   });
 
   it('rejects unsupported project file schema versions explicitly', () => {

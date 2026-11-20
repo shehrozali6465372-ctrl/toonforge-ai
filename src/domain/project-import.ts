@@ -1,5 +1,6 @@
 import * as z from 'zod';
 import type { Project } from '@/lib/types';
+import type { ProjectManifestMetadata } from './metadata';
 
 export const PROJECT_FILE_KIND = 'toonforge.project' as const;
 export const PROJECT_FILE_SCHEMA_VERSION = '1.0' as const;
@@ -240,16 +241,54 @@ const ProjectSchema = z.strictObject({
   });
 });
 
+const MetadataAssetIdSchema = z.string().regex(/^[a-z][a-z0-9_-]*$/);
+const MetadataAssetPathSchema = z.string().min(1).max(240).refine((path) => {
+  const segments = path.split('/');
+  return segments[0] === 'assets'
+    && segments.length >= 3
+    && segments.slice(1).every((segment) => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(segment));
+}, 'Asset metadata paths must be safe relative paths beneath assets/');
+
+const ProjectManifestMetadataSchema = z.strictObject({
+  projectId: z.string().min(1),
+  manifest: z.strictObject({ id: z.string().min(1), schemaVersion: z.literal('1.0') }),
+  assetMetadata: z.record(MetadataAssetIdSchema, z.strictObject({
+    kind: z.enum(['character', 'environment', 'prop', 'audio']),
+    path: MetadataAssetPathSchema,
+    format: z.enum(['glb', 'gltf', 'wav', 'mp3', 'ogg']),
+    provenance: z.strictObject({
+      source: z.enum(['generated', 'user-uploaded', 'licensed-catalog']),
+      licenseId: z.string().min(1),
+      sourceUrl: z.string().url().refine((url) => url.startsWith('https://')).optional(),
+      attribution: z.string().min(1).optional(),
+      commercialUse: z.enum(['allowed', 'restricted', 'unknown']),
+      verified: z.boolean(),
+    }),
+  })),
+  sceneMetadata: z.record(MetadataAssetIdSchema, z.strictObject({
+    storySceneId: MetadataAssetIdSchema.optional(),
+    shotType: z.enum(['establishing', 'wide', 'medium', 'close_up', 'over_the_shoulder']),
+  })),
+  updatedAt: z.number().int().nonnegative().safe(),
+});
+
 const ProjectFileEnvelopeSchema = z.strictObject({
   kind: z.literal(PROJECT_FILE_KIND),
   schemaVersion: z.literal(PROJECT_FILE_SCHEMA_VERSION),
   project: ProjectSchema,
+  metadata: ProjectManifestMetadataSchema.optional(),
 });
 
 export interface ProjectFileEnvelope {
   kind: typeof PROJECT_FILE_KIND;
   schemaVersion: typeof PROJECT_FILE_SCHEMA_VERSION;
   project: Project;
+  metadata?: ProjectManifestMetadata;
+}
+
+export interface ProjectImportBundle {
+  project: Project;
+  metadata?: ProjectManifestMetadata;
 }
 
 export type ProjectImportErrorCode = 'invalid_project' | 'unsupported_version';
@@ -262,7 +301,7 @@ export class ProjectImportError extends Error {
 }
 
 /** Accepts legacy raw Project exports and the current explicitly versioned envelope. */
-export function parseProjectImport(input: unknown): Project {
+export function parseProjectImportBundle(input: unknown): ProjectImportBundle {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw new ProjectImportError('invalid_project', 'Project file must contain a JSON object');
   }
@@ -276,21 +315,64 @@ export function parseProjectImport(input: unknown): Project {
     if (!envelope.success) {
       throw new ProjectImportError('invalid_project', 'Versioned project file failed validation');
     }
-    return envelope.data.project;
+    const { project, metadata } = envelope.data;
+    if (metadata) {
+      if (metadata.projectId !== project.id || metadata.manifest.id !== project.id) {
+        throw new ProjectImportError('invalid_project', 'Manifest metadata identity must match the Project ID');
+      }
+    }
+    return { project, ...(metadata ? { metadata } : {}) };
   }
 
   const legacy = ProjectSchema.safeParse(input);
   if (!legacy.success) {
     throw new ProjectImportError('invalid_project', 'Legacy project file failed validation');
   }
-  return legacy.data;
+  return { project: legacy.data };
 }
 
-export function createProjectFileEnvelope(project: Project): ProjectFileEnvelope {
+export function parseProjectImport(input: unknown): Project {
+  return parseProjectImportBundle(input).project;
+}
+
+/** Assign a fresh local Project identity while keeping manifest/scene provenance attached. */
+export function rekeyProjectImportBundle(
+  bundle: ProjectImportBundle,
+  projectId: string,
+  importedAt: number,
+): ProjectImportBundle {
+  if (!bundle || !bundle.project || typeof projectId !== 'string' || projectId.length === 0) {
+    throw new ProjectImportError('invalid_project', 'Imported Project and new Project ID are required');
+  }
+  if (!Number.isSafeInteger(importedAt) || importedAt < 0) {
+    throw new ProjectImportError('invalid_project', 'Import timestamp must be a non-negative safe integer');
+  }
+  const project: Project = {
+    ...bundle.project,
+    id: projectId,
+    createdAt: importedAt,
+    updatedAt: importedAt,
+  };
+  const metadata = bundle.metadata ? {
+    ...bundle.metadata,
+    projectId,
+    manifest: { ...bundle.metadata.manifest, id: projectId },
+    assetMetadata: structuredClone(bundle.metadata.assetMetadata),
+    sceneMetadata: structuredClone(bundle.metadata.sceneMetadata),
+    updatedAt: importedAt,
+  } : undefined;
+  return { project, ...(metadata ? { metadata } : {}) };
+}
+
+export function createProjectFileEnvelope(
+  project: Project,
+  metadata?: ProjectManifestMetadata,
+): ProjectFileEnvelope {
   return {
     kind: PROJECT_FILE_KIND,
     schemaVersion: PROJECT_FILE_SCHEMA_VERSION,
     project,
+    ...(metadata ? { metadata } : {}),
   };
 }
 

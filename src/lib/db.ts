@@ -41,7 +41,18 @@ export async function saveProject(project: Project): Promise<void> {
   await db.projects.put(project);
 }
 
-/** Save the editor Project and its manifest/provenance sidecars atomically. */
+/** Create a Project and optional manifest sidecar atomically, never overwriting an existing ID. */
+export async function saveProjectImport(project: Project, metadata?: ProjectManifestMetadata): Promise<void> {
+  if (metadata && (metadata.projectId !== project.id || metadata.manifest.id !== project.id)) {
+    throw new Error('Manifest metadata identity must match the imported Project ID');
+  }
+  await db.transaction('rw', db.projects, db.projectMetadata, async () => {
+    await db.projects.add(project);
+    if (metadata) await db.projectMetadata.add(metadata);
+  });
+}
+
+/** Save a compiled manifest import and its metadata sidecar atomically. */
 export async function saveCompiledManifestImport(compiled: CompiledSceneManifest): Promise<void> {
   if (compiled.manifest.id !== compiled.project.id) {
     throw new Error('Scene manifest ID must match the compiled Project ID');
@@ -53,11 +64,7 @@ export async function saveCompiledManifestImport(compiled: CompiledSceneManifest
     sceneMetadata: structuredClone(compiled.sceneMetadata),
     updatedAt: compiled.project.updatedAt,
   };
-
-  await db.transaction('rw', db.projects, db.projectMetadata, async () => {
-    await db.projects.put(compiled.project);
-    await db.projectMetadata.put(metadata);
-  });
+  await saveProjectImport(compiled.project, metadata);
 }
 
 export async function deleteProject(id: string): Promise<void> {

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { db, getAllProjects, getProject, getProjectManifestMetadata, saveProject, saveCompiledManifestImport, deleteProject, duplicateProject, resetDatabase } from './db';
+import { db, getAllProjects, getProject, getProjectManifestMetadata, saveProject, saveProjectImport, saveCompiledManifestImport, deleteProject, duplicateProject, resetDatabase } from './db';
 import type { CompiledSceneManifest } from '@/domain/scene-manifest-compiler';
 import { createProject } from './factories';
 
@@ -61,6 +61,39 @@ describe('saveProject / getProject / getAllProjects', () => {
   });
 });
 
+describe('Project JSON import persistence', () => {
+  it('atomically creates an imported project and its validated manifest sidecar', async () => {
+    const source = compiledImport();
+    const imported = { ...source.project, id: 'imported-project' };
+    const metadata = {
+      projectId: imported.id,
+      manifest: { ...source.manifest, id: imported.id },
+      assetMetadata: structuredClone(source.assetMetadata),
+      sceneMetadata: structuredClone(source.sceneMetadata),
+      updatedAt: imported.updatedAt,
+    };
+
+    await saveProjectImport(imported, metadata);
+    expect(await getProject(imported.id)).toEqual(imported);
+    expect(await getProjectManifestMetadata(imported.id)).toEqual(metadata);
+  });
+
+  it('rejects imported metadata identity mismatches before writing', async () => {
+    const source = compiledImport();
+    const imported = { ...source.project, id: 'imported-project' };
+    const metadata = {
+      projectId: source.project.id,
+      manifest: source.manifest,
+      assetMetadata: source.assetMetadata,
+      sceneMetadata: source.sceneMetadata,
+      updatedAt: imported.updatedAt,
+    };
+    await expect(saveProjectImport(imported, metadata)).rejects.toThrow(/identity must match/);
+    expect(await getProject(imported.id)).toBeUndefined();
+    expect(await getProjectManifestMetadata(imported.id)).toBeUndefined();
+  });
+});
+
 describe('compiled manifest persistence', () => {
   it('atomically persists the editor project and its manifest provenance sidecars', async () => {
     const compiled = compiledImport();
@@ -72,6 +105,19 @@ describe('compiled manifest persistence', () => {
       manifest: compiled.manifest,
       assetMetadata: compiled.assetMetadata,
       sceneMetadata: compiled.sceneMetadata,
+    });
+  });
+
+  it('rejects a duplicate project ID without overwriting the existing project or sidecar', async () => {
+    const original = compiledImport(project('Original import'));
+    await saveCompiledManifestImport(original);
+    const duplicate = compiledImport({ ...original.project, name: 'Must not overwrite' });
+
+    await expect(saveCompiledManifestImport(duplicate)).rejects.toThrow();
+    expect((await getProject(original.project.id))?.name).toBe('Original import');
+    expect(await getProjectManifestMetadata(original.project.id)).toMatchObject({
+      projectId: original.project.id,
+      manifest: original.manifest,
     });
   });
 

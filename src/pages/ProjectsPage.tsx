@@ -2,16 +2,19 @@ import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Plus, Search, MoreVertical, FolderOpen, Copy, Trash2, Edit3, Download, Upload, Film, Box, Square, Clock, Monitor } from 'lucide-react';
-import { db, getAllProjects, deleteProject, duplicateProject } from '@/lib/db';
+import { Plus, Search, MoreVertical, FolderOpen, Copy, Trash2, Edit3, Download, Upload, FileUp, Film, Box, Square, Clock, Monitor } from 'lucide-react';
+import { db, getAllProjects, getProjectManifestMetadata, saveProjectImport, deleteProject, duplicateProject } from '@/lib/db';
 import type { Project } from '@/lib/types';
 import { uid } from '@/lib/types';
 import { NewProjectModal } from '@/components/NewProjectModal';
+import { ManifestImportDialog } from '@/components/ManifestImportDialog';
 import { downloadJSON, formatBytes, formatDuration } from '@/lib/download';
 import {
   createProjectFileEnvelope,
   isProjectImportSizeAllowed,
-  parseProjectImport,
+  parseProjectImportBundle,
+  ProjectImportError,
+  rekeyProjectImportBundle,
   PROJECT_IMPORT_MAX_BYTES,
 } from '@/domain/project-import';
 
@@ -19,6 +22,7 @@ export default function ProjectsPage() {
   const { t, i18n } = useTranslation('projects');
   const projects = useLiveQuery(() => getAllProjects(), [], [] as Project[]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [manifestImportOpen, setManifestImportOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'name' | 'mode'>('date');
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
@@ -44,8 +48,13 @@ export default function ProjectsPage() {
     setRenameId(null);
   };
 
-  const handleExport = (p: Project) => {
-    downloadJSON(createProjectFileEnvelope(p), `${p.name.replace(/\s+/g, '-').toLowerCase()}.json`);
+  const handleExport = async (p: Project) => {
+    try {
+      const metadata = await getProjectManifestMetadata(p.id);
+      downloadJSON(createProjectFileEnvelope(p, metadata), `${p.name.replace(/\s+/g, '-').toLowerCase()}.json`);
+    } catch {
+      alert(t('projectExportFailed'));
+    }
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,17 +69,11 @@ export default function ProjectsPage() {
       }
 
       const fileContent: unknown = JSON.parse(await file.text());
-      const parsed = parseProjectImport(fileContent);
-      const imported: Project = {
-        ...parsed,
-        id: uid(),
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-      // add() fails on an ID collision instead of silently overwriting a project.
-      await db.projects.add(imported);
-    } catch {
-      alert(t('invalidProjectFile'));
+      const bundle = parseProjectImportBundle(fileContent);
+      const imported = rekeyProjectImportBundle(bundle, `import-${uid()}`, Date.now());
+      await saveProjectImport(imported.project, imported.metadata);
+    } catch (cause) {
+      alert(t(cause instanceof SyntaxError || cause instanceof ProjectImportError ? 'invalidProjectFile' : 'projectImportFailed'));
     } finally {
       input.value = '';
     }
@@ -106,6 +109,10 @@ export default function ProjectsPage() {
               <span className="hidden sm:inline">{t('import')}</span>
               <input type="file" accept=".json,application/json" onChange={handleImport} className="hidden" />
             </label>
+            <button type="button" onClick={() => setManifestImportOpen(true)} className="btn-outline">
+              <FileUp className="w-4 h-4" />
+              <span className="hidden sm:inline">{t('importManifest')}</span>
+            </button>
             <button onClick={() => setModalOpen(true)} className="btn-primary">
               <Plus className="w-4 h-4" />
               {t('newProject')}
@@ -224,6 +231,7 @@ export default function ProjectsPage() {
         )}
 
         <NewProjectModal open={modalOpen} onClose={() => setModalOpen(false)} />
+        <ManifestImportDialog open={manifestImportOpen} onClose={() => setManifestImportOpen(false)} />
 
         {/* Delete confirmation */}
         {confirmDelete && (
