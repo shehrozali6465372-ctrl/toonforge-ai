@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { compileSceneManifest, SceneManifestCompileError } from './scene-manifest-compiler';
 import { SceneManifestSchema } from './contracts';
+import { packageGlbAsset } from './glb-asset-packager';
 
-function createGlbDataUrl() {
+function createGlbBytes() {
   const json = new TextEncoder().encode('{"asset":{"version":"2.0"}}');
   const jsonChunkLength = Math.ceil(json.length / 4) * 4;
   const bytes = new Uint8Array(20 + jsonChunkLength);
@@ -14,10 +15,10 @@ function createGlbDataUrl() {
   view.setUint32(16, 0x4e4f534a, true);
   bytes.fill(0x20, 20);
   bytes.set(json, 20);
-  return `data:model/gltf-binary;base64,${btoa(String.fromCharCode(...bytes))}`;
+  return bytes;
 }
 
-const modelDataUrl = createGlbDataUrl();
+const modelDataUrl = packageGlbAsset(createGlbBytes(), { maxBytes: 1024 * 1024 }).dataUrl;
 
 function makeManifest() {
   return SceneManifestSchema.parse({

@@ -430,13 +430,38 @@ This checkpoint supersedes stale repository and implementation-status snapshots 
 - `git diff --check`: exit 0 before the context update.
 - Compiler implementation commit: `0444a18f276cc1c1ccbaaa897c3b283d13454d0b` (`feat: compile scene manifests into editor projects`). Push to `toonforge/stage1/source-import` succeeded; `git ls-remote` verified the branch SHA equals this commit. GitHub fetches independently verified `PROJECT_CONTEXT.md`, compiler source and compiler tests.
 
-### 12.8 Next work block — secure GLB asset packaging
+### 12.8 Secure GLB asset packager — 20 November 2026
 
-1. Implement a pure GLB packager/validator that accepts uploaded bytes, verifies the GLB v2 container and JSON chunk, and rejects external buffer/image URI references before producing a data URL for the compiler.
-2. Add explicit asset-size limits and malformed/truncated-file tests based on a documented product limit; do not invent a limit without recording its memory/storage rationale.
-3. Keep file access and packaging separate from the pure compiler. The compiler should receive only already validated, self-contained data URLs.
-4. Design durable persistence for the compiler's `assetMetadata` and `sceneMetadata` sidecars; the existing IndexedDB schema currently persists only `Project`.
-5. Keep provider calls and credentials server-side. No Render service or deployment is authorized at this checkpoint.
+**Implemented locally and verified; commit/push pending at this checkpoint.**
+
+- Added `src/domain/glb-asset-packager.ts`, a pure byte-input validator/packager that accepts `ArrayBuffer` or `Uint8Array` and returns the exact compiler-compatible `data:model/gltf-binary;base64,` URL plus original byte length.
+- Validates GLB magic, version 2, declared file length, 4-byte total/chunk alignment, chunk boundaries, JSON-first ordering, exactly one JSON chunk, UTF-8/JSON parsing and `asset.version === "2.0"`.
+- Recursively rejects non-data URI references anywhere in the GLB JSON, including buffer, image and nested extension URI fields. Embedded data URIs are accepted. This prevents the imported GLTFLoader from following relative or network asset paths from packaged models.
+- Base64 conversion is chunked to avoid spreading a large byte array into one function call. A `Uint8Array` view is copied using its byteOffset/byteLength, not the entire backing buffer.
+- No product-wide size cap was invented. `maxBytes` is a required positive safe-integer option on every packaging call; the caller must choose it according to an explicit device-memory and IndexedDB-storage budget. Oversized files are rejected before parsing/encoding.
+- The packager is separate from UI/FileReader and from the pure scene compiler. It performs no network or filesystem I/O and does not upload or persist assets.
+- Added 12 focused tests for valid package output, subarray handling, caller size limits, invalid headers/versions/lengths, malformed/truncated chunks, invalid JSON/version, external buffer/image/extension URIs, invalid URI types, embedded data URIs and duplicate JSON/trailing data.
+- Scene compiler tests now consume a data URL produced by the packager, exercising the package-to-compile boundary.
+- **Not implemented:** browser file-picker integration, IndexedDB sidecar persistence, product-level file-size policy, project import UI changes or backend storage.
+
+### 12.9 Verification evidence — 20 November 2026
+
+- Focused GLB packager + compiler suites: **28/28 tests passed** (12 packager + 16 compiler).
+- Full resource-safe Vitest run `npx vitest run --pool=threads --maxWorkers=1`: **8/8 files passed, 141/141 tests passed** (89 existing editor tests + 24 contract tests + 16 compiler tests + 12 packager tests).
+- `npm run typecheck`: exit 0 after packager and test additions.
+- `npm run lint`: exit 0 after packager and test additions.
+- `npm run build`: exit 0; Vite transformed 2,478 modules and completed in 21.04s. Workbox generated `dist/sw.js` (2,046 bytes) and `dist/workbox-2fbc6a65.js` (15,026 bytes); PWA precache remains 18 entries / 2,804.85 KiB.
+- Existing large-bundle warning remains: main JS 1,961.50 kB (561.24 kB gzip), above Vite's 500 kB advisory threshold.
+- `git diff --check`: exit 0 before the context update.
+- Packager implementation and tests are local and uncommitted at this checkpoint.
+
+### 12.10 Next work block — manifest import orchestration and durable metadata
+
+1. Design a typed orchestration boundary that takes a validated manifest plus already packaged assets, calls the compiler, and returns a complete import result without side effects.
+2. Persist `assetMetadata` and `sceneMetadata` alongside the editor project. Inspect Dexie versioning and implement a backward-compatible migration from database version 1; do not mutate or drop existing projects.
+3. Decide and document the product-level GLB size cap using measured memory expansion (raw bytes, base64 string, decoded loader copy) and IndexedDB quota constraints before wiring a UI file picker.
+4. Harden project JSON import with runtime validation, size checks and schema/version handling; the existing `ProjectsPage` import currently performs a JSON parse and TypeScript cast only.
+5. Keep provider credentials and model calls server-side. No Render service or deployment is authorized.
 6. After verification, update this context, commit and push only to `stage1/source-import`; verify the remote SHA and keep `main` unchanged.
 
 **Stage 1 remains in progress; no production readiness or deployment claim is made.**
