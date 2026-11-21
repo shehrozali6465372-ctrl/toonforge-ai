@@ -748,9 +748,9 @@ Environment: disposable Chromium **156.0.8078.79**, headless Linux ARM64 contain
 #### Git, deployment and cleanup
 
 - Current branch remains stage1/source-import; no checkout of main occurred.
-- Code, tests, locale/help text, dependency lockfile and this context file are modified locally but **not yet committed or pushed**. Do not report a GitHub update until the commit is pushed and verified against the remote branch.
+- Implementation commit **9b39714af8040f907fa415f334efd968f78316e7** (`fix: use timestamped WebCodecs for video exports`) was pushed to `toonforge/stage1/source-import`. GitHub's commit API, remote branch SHA and the four key source/context file entries were checked and matched. `main` remains at `fcdaf3df50090a3137abe837d9374b03a90c7182`. No pull request was opened; the repository had no open PRs for this branch at the time of the check.
 - No Render deployment, public release, production-service change or public content publication occurred.
 - All test projects were created in the disposable Chromium profile. The native user's project data was not accessed or modified.
-- The test browser and preview/media servers are temporary and must be stopped before handoff; remove the disposable browser profile and temporary artifacts after any remaining verification. Preserve the repository worktree changes.
+- Gracefully closed the disposable Chromium instance, stopped the Vite preview and MP4/WebM playback servers, removed the disposable browser profile and temporary export artifacts, and verified no owned test processes or listeners remained on ports 4173, 4180, 4181 or 9224.
 
-**Next task:** finish cleanup, re-run final git diff --check and status review, update this checkpoint if any further verification changes the evidence, then commit and push the completed 2D export correction to stage1/source-import and verify the exact GitHub commit. After that, resume the unresolved 3D WebGL stability and native File System Access tests. Do not deploy to Render or claim Stage 1 completion.
+**Next task:** continue the unresolved 3D WebGL stability work on a supported user-controlled desktop browser/device with a real GPU. Separately test native File System Access with a real file handle and verify large-output integrity, cancellation and recovery. Keep target-device performance and memory tests open. Do not deploy to Render or claim Stage 1 completion.
