@@ -781,3 +781,43 @@ Environment: disposable Chromium **156.0.8078.79**, headless Linux ARM64 contain
 2. Keep native File System Access validation separate: use the actual browser picker and a real file handle, then verify output integrity/playback, cancellation, write failure and cleanup. The mock WritableStream test in 12.17 is not native-picker acceptance.
 3. Continue target-device memory/performance, long-timeline, 4K/60 fps and export cancellation/recovery tests only on supported target hardware.
 4. Do not deploy to Render, claim 3D readiness, or mark Stage 1 complete until the open acceptance criteria are demonstrated.
+
+
+### 12.19 Demo renderer lifecycle fix and constrained-host verification — 21 November 2026
+
+#### Confirmed renderer lifecycle defect
+
+- Source review found that `LandingPage` keeps `DemoPlayer` mounted while a showcase lightbox is open. It passes `paused={activeShowcase !== null}` to stop the demo timeline, but the prior `DemoPlayer` JSX still mounted its own `Canvas2D` / `Canvas3D` renderer.
+- For a video-based 3D showcase, `ShowcaseLightbox` mounts another `Canvas3D` while the paused `DemoPlayer`'s WebGL canvas remains mounted behind it. This creates two simultaneous WebGL renderer contexts on the landing page. It is a verified component-lifecycle/resource issue; it is **not** proven to be the cause of the separate editor-route context loss.
+- Changed `src/components/DemoPlayer.tsx` so the renderer is mounted only while `paused === false`. The demo name and mode labels remain visible while paused; the lightbox owns the active renderer.
+
+#### Regression test (TDD)
+
+- Added `src/components/DemoPlayer.test.tsx`, mocking only the heavy Canvas3D/Canvas2D boundaries and using a real default 3D project factory plus the real editor store.
+- RED: before the implementation change, the focused test failed because the 3D canvas remained in the document while `DemoPlayer paused`; the normal-playback renderer test passed.
+- GREEN: after the change, focused tests passed **2/2**:
+  - paused demo releases the renderer while a showcase lightbox is active;
+  - normal demo playback keeps the renderer mounted.
+
+#### Verification after code change
+
+- `npm run typecheck`: passed (the full-test pipeline advanced to lint).
+- `npm run lint`: passed (the full-test pipeline advanced to Vitest).
+- Default parallel Vitest execution stalled the constrained Android-backed container after entering the suite; the owned test session was stopped. No unrelated processes were terminated.
+- Re-ran the full suite with one worker and file parallelism disabled: **16/16 test files, 183/183 tests passed**.
+- `npm run build`: passed; Vite transformed 2,653 modules and generated the PWA service worker/precache.
+- Build output retains the known bundle advisory: main JS **2,105.99 kB** (gzip **602.56 kB**), Mediabunny lazy chunk **243.79 kB** (gzip **64.36 kB**). This was not changed or suppressed.
+- `git diff --check`: passed.
+
+#### Host capability boundary and remaining 3D diagnosis
+
+- RDC host configuration identifies the execution environment as **Linux ARM64 inside Docker**, kernel **4.9.190**, with Chromium available in the container.
+- The container cannot access `/dev/dri` or `/dev/graphics` (permission denied); `/dev/kgsl-3d0` and `/dev/mali0` are absent, and `adb` is unavailable. The browser diagnostics previously ran under SwiftShader software rendering. This host therefore cannot provide a verified physical-GPU desktop/browser acceptance test.
+- Static source inspection confirms `Canvas3D` currently requests `preserveDrawingBuffer: true` for every 3D session, not only export, and enables antialiasing outside export. This may increase renderer cost/resource pressure, but no A/B test has established it as the root cause. Do not remove/change it without an export-capture regression test and supported-browser verification.
+- The landing-page duplicate-renderer fix reduces one known source of concurrent WebGL context pressure. It does **not** resolve or close the 3D editor's SwiftShader context-loss blocker.
+
+#### Git and next actions
+
+- This code/test change is local on `stage1/source-import` at the time this entry was written. It has not yet been committed or pushed.
+- Next: commit and push this focused fix; then validate the editor and showcase lifecycle on a supported desktop browser with a real GPU. Separately test whether a non-preserved drawing buffer can be used safely for normal editing while preserving deterministic export capture. Keep native File System Access, long timeline, 4K/60 fps, memory/thermal, and export cancellation/recovery acceptance criteria open.
+- Do not deploy to Render or claim Stage 1 completion.

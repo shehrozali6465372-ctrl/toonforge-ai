@@ -75,7 +75,7 @@ export function DemoPlayer({ paused = false }: Props) {
     <div className="relative rounded-2xl overflow-hidden border border-ink-700 shadow-2xl shadow-accent-violet/10 aspect-video bg-ink-950">
       {project ? (
         <div className="absolute inset-0 pointer-events-none select-none">
-          {project.mode === '3d' ? <Canvas3D /> : <Canvas2D />}
+          {!paused && (project.mode === '3d' ? <Canvas3D /> : <Canvas2D />)}
         </div>
       ) : (
         <div className="absolute inset-0 animate-pulse bg-ink-850" />
