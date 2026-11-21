@@ -754,3 +754,30 @@ Environment: disposable Chromium **156.0.8078.79**, headless Linux ARM64 contain
 - Gracefully closed the disposable Chromium instance, stopped the Vite preview and MP4/WebM playback servers, removed the disposable browser profile and temporary export artifacts, and verified no owned test processes or listeners remained on ports 4173, 4180, 4181 or 9224.
 
 **Next task:** continue the unresolved 3D WebGL stability work on a supported user-controlled desktop browser/device with a real GPU. Separately test native File System Access with a real file handle and verify large-output integrity, cancellation and recovery. Keep target-device performance and memory tests open. Do not deploy to Render or claim Stage 1 completion.
+
+
+### 12.18 Follow-up WebGL context-loss diagnostics and RDC cleanup — 21 November 2026
+
+**Status: 3D WebGL remains an open runtime blocker. This section records additional diagnostic evidence; it is not a fix or a Stage 1 acceptance sign-off.**
+
+#### Additional 3D editor runtime evidence
+
+- Reopened the production build in disposable headless Chromium and inspected the actual 3D editor canvas under the available Linux ARM64 SwiftShader software-rendering environment.
+- With `--enable-webgl --ignore-gpu-blocklist` (without the unsafe SwiftShader opt-in), the 3D canvas initially created a WebGL2 context, but the context was lost shortly after page load. Browser logs included Three.js `Context Lost` / `Context Restored` messages, repeated context loss, SwiftShader GPU-stall warnings involving `ReadPixels`, and a later `Canvas has an existing context of a different type` context-creation error.
+- With `--enable-unsafe-swiftshader --enable-webgl --ignore-gpu-blocklist`, WebGL2 initially created and reported not-lost, but the actual editor context was lost approximately **4.2 seconds** after context creation. SwiftShader `ReadPixels` GPU-stall warnings and WebGL context-loss logs were also observed.
+- A separate bare-WebGL2-canvas follow-up diagnostic did not return a result before the remote call stalled. It is **inconclusive** and must not be represented as a passing or failing bare-WebGL test.
+- These tests establish that the actual 3D editor is unstable in this headless SwiftShader environment. They do **not** isolate whether the root cause is application rendering/resource behavior, Chromium, SwiftShader, or their interaction. This host has no physical GPU evidence; do not generalize this result to supported desktop hardware.
+
+#### Diagnostic cleanup and repository state
+
+- Reconnected to the authorized RDC device and inspected targeted process and listener state for the prior diagnostic resources: Vite preview port **4173**, Chromium debugging ports **9226/9227**, and the disposable SwiftShader profile.
+- At inspection time, no matching Vite/Chromium diagnostic process and no listener on ports 4173, 9226 or 9227 were present. No active RDC terminal sessions or retained background remote calls were reported. No unrelated process was terminated.
+- The general RDC process-list command itself returned an environment error (`ps: Unable to get system boot time`); a targeted `ps -eo pid,comm,args` inspection completed and showed no matching diagnostic processes. The repository state was independently read from the worktree.
+- Worktree was clean on `stage1/source-import` at documentation commit `2d9eca41fe3121f7462478a8517a641a495f48c8` before this documentation update. No application code or production configuration was modified during these diagnostics.
+
+#### Updated next actions
+
+1. Reproduce the 3D editor flow on a supported user-controlled desktop browser with a real GPU. Capture browser/GPU/driver versions, console logs, context-loss timing and a minimal GLB scene. If available, compare the same scene against a minimal standalone Three.js/WebGL test to separate app-specific behavior from runtime instability.
+2. Keep native File System Access validation separate: use the actual browser picker and a real file handle, then verify output integrity/playback, cancellation, write failure and cleanup. The mock WritableStream test in 12.17 is not native-picker acceptance.
+3. Continue target-device memory/performance, long-timeline, 4K/60 fps and export cancellation/recovery tests only on supported target hardware.
+4. Do not deploy to Render, claim 3D readiness, or mark Stage 1 complete until the open acceptance criteria are demonstrated.
