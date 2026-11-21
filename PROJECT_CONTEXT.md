@@ -818,6 +818,6 @@ Environment: disposable Chromium **156.0.8078.79**, headless Linux ARM64 contain
 
 #### Git and next actions
 
-- This code/test change is local on `stage1/source-import` at the time this entry was written. It has not yet been committed or pushed.
-- Next: commit and push this focused fix; then validate the editor and showcase lifecycle on a supported desktop browser with a real GPU. Separately test whether a non-preserved drawing buffer can be used safely for normal editing while preserving deterministic export capture. Keep native File System Access, long timeline, 4K/60 fps, memory/thermal, and export cancellation/recovery acceptance criteria open.
+- This code/test and context update was committed as **275cb97** (`fix: release paused demo renderers`) and pushed to `toonforge/stage1/source-import`. Remote SHA and clean worktree were checked after the push.
+- Next: validate the editor and showcase lifecycle on a supported desktop browser with a real GPU. Separately test whether a non-preserved drawing buffer can be used safely for normal editing while preserving deterministic export capture. Keep native File System Access, long timeline, 4K/60 fps, memory/thermal, and export cancellation/recovery acceptance criteria open.
 - Do not deploy to Render or claim Stage 1 completion.
