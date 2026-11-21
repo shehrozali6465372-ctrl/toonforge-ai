@@ -846,3 +846,34 @@ Environment: disposable Chromium **156.0.8078.79**, headless Linux ARM64 contain
 - Do not change renderer context attributes solely from these software-rendering results.
 - Obtain a supported desktop browser with an actual GPU and reproduce editor, preview, showcase, and export in real time. Capture GPU/renderer identity, browser version, context-loss timestamps, and console logs.
 - If real-GPU failure reproduces, isolate renderer features one at a time (shadows, environment maps, imported GLB, text geometry, reference grid, antialiasing) with a reproducible scene. Keep the physical-GPU and native file-picker acceptance blockers open.
+
+
+### 12.21 File System Access preflight tests and current host capability — 21 November 2026
+
+#### Browser capability check
+
+- Headless Chromium **156.0.8078.79** reports `window.isSecureContext === true`, `typeof window.showSaveFilePicker === 'function'`, and `typeof window.showOpenFilePicker === 'function'` on a local file URL.
+- The RDC container has empty `DISPLAY` and `WAYLAND_DISPLAY`; neither `Xvfb` nor `xvfb-run` is installed. Therefore no interactive native file picker can be exercised on this host. API presence does **not** prove a real OS save dialog, user selection, disk write, or cancellation works end to end.
+
+#### Added automated preflight regression tests
+
+- Added `src/components/editor/ExportModal.test.tsx` with a 60-second 2D project, which exceeds the 48 MiB estimated-size threshold at the default MP4 bitrate.
+- Test 1: when `showSaveFilePicker` is unavailable, the export stops before canvas capture/encoding, displays the large-export capability message, and does not leave the editor store in exporting state.
+- Test 2: when the picker rejects with `AbortError`, the modal treats it as user cancellation, shows no export error, and does not leave the editor store in exporting state.
+- Focused tests: **2/2 passed**.
+
+#### Full verification after adding the tests
+
+- `npm run typecheck`: passed.
+- `npm run lint`: passed.
+- `npx vitest run --maxWorkers 1 --no-file-parallelism`: **17/17 test files, 185/185 tests passed**.
+- `npm run build`: passed; Vite transformed 2,653 modules.
+- Build still reports the known main-bundle advisory: main JS **2,105.99 kB** (gzip **602.56 kB**), lazy Mediabunny chunk **243.79 kB** (gzip **64.36 kB**).
+- `git diff --check`: passed.
+
+#### Remaining file-save acceptance criteria
+
+- Native picker UI selection and cancellation in a real desktop browser.
+- Actual disk-backed output bytes and file integrity, including MP4/WebM playable artifact verification.
+- Permission denial, quota/disk-full, interrupted write, writable abort, browser shutdown, and recovery behavior.
+- The earlier mock WHATWG WritableStream test remains only evidence for the application streaming path; it is not a substitute for native picker and filesystem verification.
