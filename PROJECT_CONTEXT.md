@@ -1,10 +1,10 @@
 # ToonForge AI — Project Context & Development Order
 
-**Last updated:** 21 November 2026 (RDC WebGL and actual video-export investigation)
+**Last updated:** 21 November 2026 (RDC deterministic video-export and streaming verification)
 **Project name:** ToonForge AI  
 **Library folder:** `/ToonForge AI`  
 **Architecture document:** `ARCHITECTURE.md`  
-**Project status:** Stage 1 — implementation in progress. Editor source integration, domain contracts/compiler, GLB packaging, manifest persistence and secure Project JSON import are implemented. New browser evidence: WebGL2 can initialize under SwiftShader but the 3D editor loses its context; actual 2D MP4 export completes but has a timeline-duration mismatch and outputs VP9 despite the H.264 label. Production readiness and deployment remain blocked.
+**Project status:** Stage 1 — implementation in progress. Editor source integration, domain contracts/compiler, GLB packaging, manifest persistence and secure Project JSON import are implemented. New 21 November evidence: deterministic timestamped 2D MP4 (H.264) and WebM (VP9) exports now match the 2D project timeline and play back; the large-export streaming target was verified with a mock writable sink. The actual 3D editor still loses its WebGL context under the current SwiftShader runtime, and native File System Access plus target-device hardware validation remain open. Production readiness and deployment remain blocked.
 
 ---
 
@@ -668,3 +668,89 @@ Captured from the disposable headless Chromium profile after the import/export c
 - WebCodecs `VideoEncoder.isConfigSupported` returned supported for H.264 (`avc1.42001E`, `avc1.42E01E`), VP9 (`vp09.00.10.08`) and VP8 (`vp8`) at 640 × 360 / 30 fps.
 - A five-frame WebCodecs H.264 encode completed with **5 encoded chunks**, **1,912 bytes**, codec metadata `avc1.42E01E`, a 33-byte decoder configuration description and no encoder errors. This was an encoder-only probe; no MP4 container/muxer was produced.
 - Repository dependency/source inspection found no existing `mp4-muxer`, `webm-muxer`, `mp4box.js`, `mp4box`, `webm-writer` or `@webav/av-cliper` dependency/reference. A deterministic WebCodecs implementation would therefore need an evaluated muxer dependency or a deliberately implemented container writer; do not assume this capability is already present.
+
+### 12.17 RDC deterministic 2D video export correction and streaming verification — 21 November 2026
+
+**This section supersedes the 2D video-export duration/codec findings in 12.16. It does not resolve the 3D WebGL context-loss blocker. Stage 1 remains in progress; no production-readiness or deployment claim is made.**
+
+#### Implementation changes
+
+- Added mediabunny@1.66.2 (MPL-2.0) as the browser-side WebCodecs encoder/muxer.
+- Replaced the MediaRecorder wall-clock capture path with timestamped CanvasSource encoding:
+  - MP4 uses H.264 (avc) in an MP4 container.
+  - WebM uses VP9 (vp9) in a WebM container.
+  - canEncodeVideo checks whether the selected encoder/settings are available before rendering begins; unsupported configurations fail with a clear UI message.
+  - Each frame is assigned its timeline timestamp and duration. Rendering may take longer than playback duration without stretching the exported timeline.
+- Added pure timeline helpers:
+  - getVideoExportFrameCount computes the required frame count.
+  - getVideoExportFrameTiming returns each frame's exact timestamp and duration, clipping the final frame to the remaining timeline duration.
+  - Invalid durations, frame rates and frame indexes are rejected.
+- Added H.264 dimension normalization: odd source dimensions are padded to the next even output dimension without shrinking the content. Example: an 853 × 480 project exports as 854 × 480 MP4; WebM retains the 853 × 480 source dimensions.
+- MOV is disabled in the format selector because no MOV conversion encoder exists.
+- Added WebGL context-loss detection during frame rendering. A lost context stops export with a recovery message rather than silently generating corrupt/blank output.
+- Large estimated video exports above **48 MiB** use showSaveFilePicker and Mediabunny StreamTarget; smaller outputs use BufferTarget. If the browser does not expose the file picker for a large export, the UI asks the user to reduce resolution, quality or duration rather than allocating an unbounded output Blob. The writable stream is tracked and aborted on failures before finalization to avoid leaving a partial file handle open.
+- Mediabunny is dynamically imported only when MP4/WebM export is requested. This avoids adding the muxer to the initial application bundle; GIF remains independent of Mediabunny.
+- Updated English and French editor, landing-page and help text to describe WebCodecs exports, encoder/device dependency, MOV limitation and large-export file streaming.
+
+#### Browser verification — actual 2D project and artifacts
+
+Environment: disposable Chromium **156.0.8078.79**, headless Linux ARM64 container with SwiftShader software rendering. This is a 2D export verification only, not a hardware-GPU or 3D renderer acceptance test.
+
+- Created a disposable 2D project through the production build's actual project wizard, added a visible purple rectangle through the editor UI, and exported through the actual Export Modal.
+- **MP4 result:**
+  - 480p output: **854 × 480**.
+  - MP4 sample entry: **avc1** (H.264).
+  - MP4 track timescale: 30; sample count: **90 frames**.
+  - Movie and video-track duration: exactly **3.0 seconds**.
+  - Artifact: **8,744 bytes**, recognized as ISO Base Media MP4.
+  - Served the exact artifact back into Chromium. It loaded and played with readyState=4, no media error, 3.0-second duration and visible non-black/purple scene pixels.
+- **WebM result:**
+  - Output: **853 × 480**.
+  - WebM codec marker: **V_VP9**.
+  - Chromium playback metadata: exactly **3.0 seconds**, 853 × 480, readyState=4, no media error, playback active and visible non-black/purple scene pixels.
+  - Artifact: **7,067 bytes**, recognized as WebM.
+- Both artifacts were generated from the same 3.0-second project timeline. This verifies that the prior 1.0-second-to-10.919-second MediaRecorder defect and generic-MIME VP9-in-MP4 mismatch no longer reproduce in the actual 2D Export Modal on this Chromium runtime.
+- The encoder module was lazy-loaded from a separate production chunk. Build output:
+  - Main JS: **2,105.99 kB** (gzip **602.55 kB**).
+  - Mediabunny dynamic chunk: **243.79 kB** (gzip **64.37 kB**).
+  - The previous static-import build's main bundle was **2,350.14 kB** (gzip **667.01 kB**). The initial bundle therefore dropped by approximately the dynamic chunk size.
+  - The existing Vite **500 kB** chunk-size advisory remains for the main application bundle.
+
+#### Large-export streaming-path verification
+
+- Set a disposable test project's scene duration to **26 seconds**, selected MP4, 480p and Maximum quality. The UI estimate was **49.6 MB**, exceeding the 48 MiB in-memory threshold.
+- In the isolated browser test only, stubbed window.showSaveFilePicker with a mock file handle backed by a real WHATWG WritableStream. This forced the production StreamTarget code path without opening a native file picker or writing a real user file.
+- Observed the expected suggested filename and MP4 file type, then completed all 780 timeline frames.
+- On finalization, the mock writable sink received **1 chunk / 71,187 bytes**, closed successfully, and the app displayed **“Your video has been saved to the selected file.”**
+- **Scope limitation:** this validates the app's large-export branch, Mediabunny StreamTarget writes, stream finalization and UI state using a mock writable sink. The native browser File System Access picker and a real on-disk streamed output were not exercised. Do not claim native file-system streaming is fully accepted until that separate test is performed.
+
+#### Automated verification — 21 November 2026
+
+- Added two pure unit-test files:
+  - src/domain/video-export-timing.test.ts
+  - src/domain/video-export-resolution.test.ts
+- New focused tests: **7/7 passed**.
+- Full Vitest suite: **15/15 test files, 181/181 tests passed**.
+- npm run typecheck: passed (exit 0).
+- npm run lint: passed (exit 0).
+- npm run build: passed (exit 0); Workbox generated the service worker and precache.
+- git diff --check: passed.
+- Main bundle warning remains; no chunk-size warning was suppressed or hidden.
+
+#### Remaining blockers and next work
+
+1. **3D WebGL stability remains open.** The actual editor previously lost its WebGL context under SwiftShader. Re-test on a supported user-controlled desktop browser/device with a real GPU, import/render a GLB, and verify a stable scene over time. Do not infer 3D readiness from the 2D export results.
+2. **Native File System Access remains unverified.** Test a large export using the actual browser picker and a real file handle; verify file integrity, playback, cancellation, write failure and cleanup. The mock WritableStream result above is not a substitute for that test.
+3. **Target-device performance remains open.** Test 1–3 minute timelines, peak memory, 4K/60 fps encoder limits, thermal/CPU constraints, IndexedDB quota and recovery on intended client hardware.
+4. **Export cancellation and WebGL-loss recovery need dedicated end-to-end browser tests.** The current helper unit tests cover timeline arithmetic, not the full cancellation/failure lifecycle.
+5. The 48 MiB buffer threshold is a conservative implementation guard, not a measured maximum-safe browser heap limit. Keep the provisional manifest/GLB/Project JSON caps unchanged until target-device capacity tests pass.
+
+#### Git, deployment and cleanup
+
+- Current branch remains stage1/source-import; no checkout of main occurred.
+- Code, tests, locale/help text, dependency lockfile and this context file are modified locally but **not yet committed or pushed**. Do not report a GitHub update until the commit is pushed and verified against the remote branch.
+- No Render deployment, public release, production-service change or public content publication occurred.
+- All test projects were created in the disposable Chromium profile. The native user's project data was not accessed or modified.
+- The test browser and preview/media servers are temporary and must be stopped before handoff; remove the disposable browser profile and temporary artifacts after any remaining verification. Preserve the repository worktree changes.
+
+**Next task:** finish cleanup, re-run final git diff --check and status review, update this checkpoint if any further verification changes the evidence, then commit and push the completed 2D export correction to stage1/source-import and verify the exact GitHub commit. After that, resume the unresolved 3D WebGL stability and native File System Access tests. Do not deploy to Render or claim Stage 1 completion.

@@ -37,6 +37,7 @@
     "i18next-browser-languagedetector": "^8.2.1",
     "konva": "^10.3.0",
     "lucide-react": "^1.26.0",
+    "mediabunny": "^1.66.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-i18next": "^17.0.11",

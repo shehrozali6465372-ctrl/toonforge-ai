@@ -29,7 +29,7 @@ export default {
       scenes3d: { title: 'Scènes 3D complètes', desc: 'Primitives, import glTF, lumières, caméras, matériaux PBR — rendu WebGL temps réel.' },
       keyframes: { title: 'Keyframes & Easing', desc: "Moteur d'animation custom avec courbes d'easing, spring et bézier custom." },
       scenesTransitions: { title: 'Scènes et réglages de transition', desc: 'Créez plusieurs scènes et configurez les transitions ; leur rendu n’est pas encore implémenté.' },
-      videoExport: { title: 'Interface d’export navigateur', desc: 'L’encodage GIF est disponible ; les codecs vidéo dépendent du navigateur et ne sont pas encore vérifiés. La conversion MOV n’est pas implémentée.' },
+      videoExport: { title: 'Export vidéo dans le navigateur', desc: 'Les exports GIF, MP4 (H.264) horodaté et WebM (VP9) utilisent les encodeurs du navigateur ; leur disponibilité dépend de l’appareil. L’export MOV n’est pas implémenté.' },
       offlinePwa: { title: 'PWA installable', desc: 'Le shell et l’éditeur local peuvent fonctionner hors ligne après mise en cache ; les projets restent dans IndexedDB du navigateur.' },
     },
   },

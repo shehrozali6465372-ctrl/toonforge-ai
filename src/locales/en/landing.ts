@@ -29,7 +29,7 @@ export default {
       scenes3d: { title: 'Full 3D scenes', desc: 'Primitives, glTF import, lights, cameras, PBR materials — real-time WebGL rendering.' },
       keyframes: { title: 'Keyframes & Easing', desc: 'Custom animation engine with easing, spring, and custom bézier curves.' },
       scenesTransitions: { title: 'Scenes & transition settings', desc: 'Create multiple scenes and configure transition settings; transition rendering is not implemented yet.' },
-      videoExport: { title: 'Browser export UI', desc: 'GIF encoding is available; video MIME support depends on the browser and has not been verified. MOV conversion is not implemented.' },
+      videoExport: { title: 'Browser video export', desc: 'GIF, timestamped MP4 (H.264) and WebM (VP9) export use browser encoders; codec availability depends on the device. MOV export is not implemented.' },
       offlinePwa: { title: 'Installable PWA', desc: 'The app shell and local editor can work offline after caching; projects are stored in browser-local IndexedDB.' },
     },
   },

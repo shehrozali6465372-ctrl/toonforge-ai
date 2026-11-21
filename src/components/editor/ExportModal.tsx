@@ -2,6 +2,9 @@ import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Download, FileVideo, Check, Loader2, AlertTriangle } from 'lucide-react';
 import { GIFEncoder, quantize, applyPalette } from 'gifenc';
+import type { CanvasSource, Output, StreamTargetChunk } from 'mediabunny';
+import { getVideoExportFrameCount, getVideoExportFrameTiming } from '@/domain/video-export-timing';
+import { getH264CompatibleResolution } from '@/domain/video-export-resolution';
 import { useEditorStore } from '@/lib/store';
 import { getExportResolution } from '@/lib/factories';
 import type { ExportDefaults } from '@/lib/types';
@@ -12,6 +15,17 @@ interface Props {
   open: boolean;
   onClose: () => void;
 }
+
+const MAX_BUFFER_EXPORT_BYTES = 48 * 1024 * 1024;
+
+type ExportSaveFileHandle = {
+  createWritable: () => Promise<WritableStream<StreamTargetChunk>>;
+};
+
+type ExportSaveFilePicker = (options: {
+  suggestedName: string;
+  types: Array<{ description: string; accept: Record<string, string[]> }>;
+}) => Promise<ExportSaveFileHandle>;
 
 export function ExportModal({ open, onClose }: Props) {
   const { t } = useTranslation('editor');
@@ -28,14 +42,15 @@ export function ExportModal({ open, onClose }: Props) {
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [done, setDone] = useState(false);
+  const [savedToFileSystem, setSavedToFileSystem] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const cancelRef = useRef(false);
 
-  const FORMATS: { value: ExportDefaults['format']; label: string; desc: string }[] = [
+  const FORMATS: { value: ExportDefaults['format']; label: string; desc: string; disabled?: boolean }[] = [
     { value: 'mp4', label: t('exportModal.formats.mp4.label'), desc: t('exportModal.formats.mp4.desc') },
     { value: 'webm', label: t('exportModal.formats.webm.label'), desc: t('exportModal.formats.webm.desc') },
     { value: 'gif', label: t('exportModal.formats.gif.label'), desc: t('exportModal.formats.gif.desc') },
-    { value: 'mov', label: t('exportModal.formats.mov.label'), desc: t('exportModal.formats.mov.desc') },
+    { value: 'mov', label: t('exportModal.formats.mov.label'), desc: t('exportModal.formats.mov.desc'), disabled: true },
   ];
 
   const RESOLUTIONS: { value: ExportDefaults['resolutionPreset']; label: string }[] = [
@@ -55,7 +70,12 @@ export function ExportModal({ open, onClose }: Props) {
   if (!open || !project) return null;
 
   const isGif = format === 'gif';
-  const res = getExportResolution(project, resolution, customW, customH);
+  const contentResolution = getExportResolution(project, resolution, customW, customH);
+  const res = format === 'mp4'
+    ? getH264CompatibleResolution(contentResolution.width, contentResolution.height)
+    : contentResolution;
+  const outputPaddingX = Math.floor((res.width - contentResolution.width) / 2);
+  const outputPaddingY = Math.floor((res.height - contentResolution.height) / 2);
   const totalDuration = project.scenes.reduce((sum, s) => sum + s.duration, 0);
   const estimatedSize = (QUALITIES.find((q) => q.value === quality)?.bitrate || 8_000_000) * totalDuration / 8;
   const isHeavy = res.width * res.height > 1920 * 1080 || project.mode === '3d';
@@ -64,6 +84,7 @@ export function ExportModal({ open, onClose }: Props) {
     setExporting(true);
     setError(null);
     setProgress(0);
+    setSavedToFileSystem(false);
     cancelRef.current = false;
 
     const store = useEditorStore.getState();
@@ -73,11 +94,50 @@ export function ExportModal({ open, onClose }: Props) {
       isPlaying: store.isPlaying,
     };
 
+    let activeOutput: Output | null = null;
+    let activeVideoSource: CanvasSource | null = null;
+    let activeFileWritable: WritableStream<StreamTargetChunk> | null = null;
+    let sourceCanvas: HTMLCanvasElement | null = null;
+    let webglContextLossHandler: ((event: Event) => void) | null = null;
+    let webglContextLost = false;
+
+    const removeWebglContextLossListener = () => {
+      if (sourceCanvas && webglContextLossHandler) {
+        sourceCanvas.removeEventListener('webglcontextlost', webglContextLossHandler);
+      }
+      webglContextLossHandler = null;
+    };
+
     try {
+      if (format === 'mov') throw new Error(t('exportModal.movNotImplemented'));
+
+      // Large outputs stream to a user-selected file. Smaller outputs use a
+      // bounded in-memory target, avoiding unbounded media buffers.
+      let fileHandlePromise: Promise<ExportSaveFileHandle> | null = null;
+      if (format !== 'gif' && estimatedSize > MAX_BUFFER_EXPORT_BYTES) {
+        const pickerWindow = window as Window & { showSaveFilePicker?: ExportSaveFilePicker };
+        const picker = pickerWindow.showSaveFilePicker;
+        if (!picker) {
+          throw new Error(t('exportModal.largeExportNeedsFilePicker', {
+            maxSize: formatBytes(MAX_BUFFER_EXPORT_BYTES),
+          }));
+        }
+        const extension = format === 'mp4' ? 'mp4' : 'webm';
+        const type: { description: string; accept: Record<string, string[]> } = format === 'mp4'
+          ? { description: 'MP4 video', accept: { 'video/mp4': ['.mp4'] } }
+          : { description: 'WebM video', accept: { 'video/webm': ['.webm'] } };
+        // Invoke before the first await so browser user activation is retained.
+        fileHandlePromise = picker.call(pickerWindow, {
+          suggestedName: `${project.name.replace(/\s+/g, '-').toLowerCase()}.${extension}`,
+          types: [type],
+        });
+      }
+      const fileHandle = fileHandlePromise ? await fileHandlePromise : null;
+      activeFileWritable = fileHandle ? await fileHandle.createWritable() : null;
+
       const canvases = document.querySelectorAll('canvas');
       if (canvases.length === 0) throw new Error(t('exportModal.canvasNotFound'));
 
-      // Precompute each scene's start offset in the timeline
       const sceneOffsets: { sceneId: string; start: number; duration: number }[] = [];
       let offset = 0;
       for (const scene of project.scenes) {
@@ -85,152 +145,216 @@ export function ExportModal({ open, onClose }: Props) {
         offset += scene.duration;
       }
 
-      // A single rAF is enough here: our state changes go through Zustand
-      // outside of a React event handler, so React (and Konva's internal
-      // batched redraw, which itself runs on rAF) has already committed by
-      // the time this callback fires. Waiting for a second rAF would double
-      // this loop's per-frame cost against MediaRecorder's real-time capture,
-      // stretching the exported video well past its intended duration.
       const waitForPaint = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-
       const targetCanvas = document.createElement('canvas');
       targetCanvas.width = res.width;
       targetCanvas.height = res.height;
-      const ctx = targetCanvas.getContext('2d')!;
+      const ctx = targetCanvas.getContext('2d');
+      if (!ctx) throw new Error(t('exportModal.canvasNotFound'));
 
-      // Render frames: drive the store's scene/time for each frame so the
-      // on-screen canvas actually reflects that instant before we capture it.
-      const totalFrames = Math.ceil(totalDuration * fps);
-      const frameTime = 1000 / fps;
-
+      const totalFrames = getVideoExportFrameCount(totalDuration, fps);
       useEditorStore.setState({ isPlaying: false, isExporting: true });
-      await waitForPaint(); // let editor-only affordances (e.g. 3D grid) hide before capturing
-      const sourceCanvas = document.querySelector('canvas') as HTMLCanvasElement | null;
+      await waitForPaint();
+      sourceCanvas = document.querySelector('canvas');
+      if (!sourceCanvas) throw new Error(t('exportModal.canvasNotFound'));
+      const renderCanvas = sourceCanvas;
 
-      // The on-screen canvas is sized to its container, not the project's
-      // aspect ratio, so its content is letterboxed (offsetX/offsetY margins)
-      // inside it. Capturing the whole canvas and stretching it to res.width
-      // x res.height both distorted the aspect ratio and left the background
-      // filling only the inner letterboxed box instead of the full frame.
-      // Crop to just the reported content rect instead.
+      webglContextLossHandler = (event) => {
+        event.preventDefault();
+        webglContextLost = true;
+      };
+      renderCanvas.addEventListener('webglcontextlost', webglContextLossHandler);
+      const webglContext = renderCanvas.getContext('webgl2') || renderCanvas.getContext('webgl');
+      if (webglContext?.isContextLost()) webglContextLost = true;
+
+      // Crop the letterboxed editor viewport to the project's actual content rect.
       const viewport = useEditorStore.getState().canvasViewport;
-      let srcX = 0, srcY = 0, srcW = sourceCanvas?.width ?? res.width, srcH = sourceCanvas?.height ?? res.height;
-      if (sourceCanvas && viewport && sourceCanvas.clientWidth > 0 && sourceCanvas.clientHeight > 0) {
-        const dprX = sourceCanvas.width / sourceCanvas.clientWidth;
-        const dprY = sourceCanvas.height / sourceCanvas.clientHeight;
+      let srcX = 0, srcY = 0, srcW = renderCanvas.width, srcH = renderCanvas.height;
+      if (viewport && renderCanvas.clientWidth > 0 && renderCanvas.clientHeight > 0) {
+        const dprX = renderCanvas.width / renderCanvas.clientWidth;
+        const dprY = renderCanvas.height / renderCanvas.clientHeight;
         srcX = viewport.offsetX * dprX;
         srcY = viewport.offsetY * dprY;
         srcW = project.settings.width * viewport.scale * dprX;
         srcH = project.settings.height * viewport.scale * dprY;
       }
 
-      // Drives the store to frame `i`'s instant and draws the resulting
-      // on-screen canvas state onto targetCanvas, cropped to the content rect.
       const drawFrame = async (i: number) => {
-        const t = i / fps;
+        const frameTimeSeconds = i / fps;
         let active = sceneOffsets[sceneOffsets.length - 1];
-        for (const so of sceneOffsets) {
-          if (t >= so.start) active = so;
+        for (const sceneOffset of sceneOffsets) {
+          if (frameTimeSeconds >= sceneOffset.start) active = sceneOffset;
           else break;
         }
-        const localTime = Math.min(t - active.start, active.duration);
-
+        const localTime = Math.min(frameTimeSeconds - active.start, active.duration);
         useEditorStore.setState({ currentSceneId: active.sceneId, currentTime: localTime });
         await waitForPaint();
 
-        if (sourceCanvas) {
-          ctx.fillStyle = '#000000';
-          ctx.fillRect(0, 0, res.width, res.height);
-          ctx.drawImage(sourceCanvas, srcX, srcY, srcW, srcH, 0, 0, res.width, res.height);
+        if (webglContextLost || webglContext?.isContextLost()) {
+          throw new Error(t('exportModal.webglContextLost'));
         }
+
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, res.width, res.height);
+        ctx.drawImage(
+          renderCanvas,
+          srcX,
+          srcY,
+          srcW,
+          srcH,
+          outputPaddingX,
+          outputPaddingY,
+          contentResolution.width,
+          contentResolution.height,
+        );
       };
 
-      const finishExport = (blob: Blob, extension: string) => {
+      const finishExport = async (blob: Blob | null, extension: string, savedToFileSystem = false) => {
         const filename = `${project.name.replace(/\s+/g, '-').toLowerCase()}.${extension}`;
-        downloadBlob(blob, filename);
+        if (blob) downloadBlob(blob, filename);
 
-        // Save thumbnail
         const thumbCanvas = document.createElement('canvas');
         thumbCanvas.width = 320;
         thumbCanvas.height = 180;
-        const thumbCtx = thumbCanvas.getContext('2d')!;
-        thumbCtx.drawImage(targetCanvas, 0, 0, 320, 180);
-        setThumbnail(thumbCanvas.toDataURL('image/jpeg', 0.7));
+        const thumbCtx = thumbCanvas.getContext('2d');
+        if (thumbCtx) {
+          thumbCtx.drawImage(targetCanvas, 0, 0, 320, 180);
+          setThumbnail(thumbCanvas.toDataURL('image/jpeg', 0.7));
+        }
 
-        // Save export defaults
         updateProjectSettings({
           exportDefaults: { format, resolutionPreset: resolution, quality, fps },
         });
-        saveProject(useEditorStore.getState().project!);
+        await saveProject(useEditorStore.getState().project!);
 
         useEditorStore.setState({ ...restoreState, isExporting: false });
         setExporting(false);
+        setSavedToFileSystem(savedToFileSystem);
         setDone(true);
         setProgress(100);
       };
 
       if (format === 'gif') {
-        // No MediaRecorder involved: quantize and LZW-encode each frame
-        // directly into a real animated GIF (gifenc), frame by frame.
         const gif = GIFEncoder();
-        const delay = Math.round(1000 / fps);
-
         for (let i = 0; i < totalFrames; i++) {
           if (cancelRef.current) {
+            removeWebglContextLossListener();
             useEditorStore.setState({ ...restoreState, isExporting: false });
             setExporting(false);
             return;
           }
 
+          const frameTiming = getVideoExportFrameTiming(i, totalDuration, fps);
+          if (!frameTiming) continue;
           await drawFrame(i);
           const { data } = ctx.getImageData(0, 0, res.width, res.height);
           const palette = quantize(data, 256);
           const index = applyPalette(data, palette);
-          gif.writeFrame(index, res.width, res.height, { palette, delay });
+          gif.writeFrame(index, res.width, res.height, {
+            palette,
+            delay: Math.max(1, Math.round(frameTiming.durationSeconds * 1000)),
+          });
 
-          if (i % 4 === 0 || i === totalFrames - 1) setProgress((i / totalFrames) * 100);
+          if (i % 4 === 0 || i === totalFrames - 1) setProgress(((i + 1) / totalFrames) * 100);
         }
 
         gif.finish();
-        finishExport(new Blob([new Uint8Array(gif.bytes())], { type: 'image/gif' }), 'gif');
+        removeWebglContextLossListener();
+        await finishExport(new Blob([new Uint8Array(gif.bytes())], { type: 'image/gif' }), 'gif');
         return;
       }
 
-      const mimeType = format === 'mp4' ? 'video/mp4' : format === 'webm' ? 'video/webm' : 'video/quicktime';
+      // Keep the sizeable WebCodecs muxer out of the initial application bundle;
+      // GIF export remains independent of the video encoder package.
+      const {
+        BufferTarget,
+        CanvasSource,
+        Mp4OutputFormat,
+        Output,
+        Quality,
+        StreamTarget,
+        WebMOutputFormat,
+        canEncodeVideo,
+      } = await import('mediabunny');
+
       const bitrate = QUALITIES.find((q) => q.value === quality)?.bitrate || 8_000_000;
+      const codec = format === 'mp4' ? 'avc' : 'vp9';
+      const videoQuality = new Quality({ bitrate });
+      if (!await canEncodeVideo(codec, {
+        width: res.width,
+        height: res.height,
+        quality: videoQuality,
+        frameRate: fps,
+      })) {
+        throw new Error(t('exportModal.codecNotSupported', { codec: format.toUpperCase() }));
+      }
 
-      const stream = targetCanvas.captureStream(fps);
-      const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: bitrate });
-      const chunks: Blob[] = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-
-      recorder.onstop = () => finishExport(new Blob(chunks, { type: mimeType }), format);
-
-      recorder.start();
+      const outputTarget = activeFileWritable
+        ? new StreamTarget(activeFileWritable, { chunked: true })
+        : new BufferTarget();
+      const outputFormat = format === 'mp4' ? new Mp4OutputFormat() : new WebMOutputFormat();
+      const output = new Output({ format: outputFormat, target: outputTarget });
+      const videoSource = new CanvasSource(targetCanvas, { codec, quality: videoQuality });
+      activeOutput = output;
+      activeVideoSource = videoSource;
+      output.addVideoTrack(videoSource, { frameRate: fps });
+      await output.start();
 
       for (let i = 0; i < totalFrames; i++) {
-        const frameStart = performance.now();
         if (cancelRef.current) {
-          recorder.stop();
+          videoSource.close();
+          activeVideoSource = null;
+          await output.cancel();
+          activeOutput = null;
+          activeFileWritable = null;
+          removeWebglContextLossListener();
           useEditorStore.setState({ ...restoreState, isExporting: false });
           setExporting(false);
           return;
         }
 
+        const frameTiming = getVideoExportFrameTiming(i, totalDuration, fps);
+        if (!frameTiming) continue;
         await drawFrame(i);
-
-        if (i % 4 === 0 || i === totalFrames - 1) setProgress((i / totalFrames) * 100);
-        const elapsed = performance.now() - frameStart;
-        await new Promise((r) => setTimeout(r, Math.max(0, frameTime - elapsed)));
+        await videoSource.add(frameTiming.timestampSeconds, frameTiming.durationSeconds);
+        if (i % 4 === 0 || i === totalFrames - 1) setProgress(((i + 1) / totalFrames) * 100);
       }
 
-      recorder.stop();
+      videoSource.close();
+      activeVideoSource = null;
+      if (cancelRef.current) {
+        await output.cancel();
+        activeOutput = null;
+        activeFileWritable = null;
+        removeWebglContextLossListener();
+        useEditorStore.setState({ ...restoreState, isExporting: false });
+        setExporting(false);
+        return;
+      }
+
+      await output.finalize();
+      activeFileWritable = null;
+      const mimeType = await output.getMimeType();
+      const blob = outputTarget instanceof BufferTarget
+        ? outputTarget.buffer ? new Blob([outputTarget.buffer], { type: mimeType }) : null
+        : null;
+      if (outputTarget instanceof BufferTarget && !blob) {
+        throw new Error(t('exportModal.genericError'));
+      }
+
+      activeOutput = null;
+      removeWebglContextLossListener();
+      await finishExport(blob, format, Boolean(fileHandle));
     } catch (err) {
+      activeVideoSource?.close();
+      if (activeOutput && activeOutput.state !== 'finalized' && activeOutput.state !== 'canceled') {
+        await activeOutput.cancel().catch(() => undefined);
+      }
+      if (activeFileWritable) await activeFileWritable.abort(err).catch(() => undefined);
+      removeWebglContextLossListener();
       useEditorStore.setState({ ...restoreState, isExporting: false });
-      setError(err instanceof Error ? err.message : t('exportModal.genericError'));
+      const pickerCanceled = err instanceof DOMException && err.name === 'AbortError';
+      setError(pickerCanceled ? null : err instanceof Error ? err.message : t('exportModal.genericError'));
       setExporting(false);
     }
   };
@@ -242,6 +366,7 @@ export function ExportModal({ open, onClose }: Props) {
     }
     setStep(0);
     setDone(false);
+    setSavedToFileSystem(false);
     setProgress(0);
     setError(null);
     onClose();
@@ -265,7 +390,7 @@ export function ExportModal({ open, onClose }: Props) {
               <Check className="w-8 h-8 text-emerald-400" />
             </div>
             <h3 className="font-semibold text-lg mb-1">{t('exportModal.doneTitle')}</h3>
-            <p className="text-sm text-ink-300 mb-4">{isGif ? t('exportModal.doneDescGif') : t('exportModal.doneDesc')}</p>
+            <p className="text-sm text-ink-300 mb-4">{isGif ? t('exportModal.doneDescGif') : savedToFileSystem ? t('exportModal.doneDescSaved') : t('exportModal.doneDesc')}</p>
             <button onClick={handleClose} className="btn-primary">{t('exportModal.close')}</button>
           </div>
         ) : exporting ? (
@@ -293,7 +418,8 @@ export function ExportModal({ open, onClose }: Props) {
                     <button
                       key={f.value}
                       onClick={() => setFormat(f.value)}
-                      className={`p-3 rounded-lg border-2 text-left transition-all ${format === f.value ? 'border-accent-violet bg-accent-violet/10' : 'border-ink-600 hover:border-ink-500'}`}
+                      disabled={f.disabled}
+                      className={`p-3 rounded-lg border-2 text-left transition-all ${f.disabled ? 'cursor-not-allowed opacity-50 border-ink-700' : format === f.value ? 'border-accent-violet bg-accent-violet/10' : 'border-ink-600 hover:border-ink-500'}`}
                     >
                       <div className="font-medium text-sm">{f.label}</div>
                       <div className="text-xs text-ink-400 mt-0.5">{f.desc}</div>
