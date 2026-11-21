@@ -821,3 +821,28 @@ Environment: disposable Chromium **156.0.8078.79**, headless Linux ARM64 contain
 - This code/test and context update was committed as **275cb97** (`fix: release paused demo renderers`) and pushed to `toonforge/stage1/source-import`. Remote SHA and clean worktree were checked after the push.
 - Next: validate the editor and showcase lifecycle on a supported desktop browser with a real GPU. Separately test whether a non-preserved drawing buffer can be used safely for normal editing while preserving deterministic export capture. Keep native File System Access, long timeline, 4K/60 fps, memory/thermal, and export cancellation/recovery acceptance criteria open.
 - Do not deploy to Render or claim Stage 1 completion.
+
+
+### 12.20 Isolated Three.js / SwiftShader context-loss baseline — 21 November 2026
+
+#### Controlled headless-browser experiments
+
+- Browser: Chromium **156.0.8078.79**, Linux ARM64 container, headless, SwiftShader enabled with `--enable-unsafe-swiftshader --use-gl=angle --use-angle=swiftshader-webgl`. Tests used `--virtual-time-budget=10000`; these are software-rendering/headless diagnostics, not real-time physical-GPU acceptance tests.
+- A minimal raw WebGL2 canvas (no Three.js renderer) created successfully and remained un-lost through its 8-second JS check; the harness reported six animation frames. This is only a narrow control, not a general browser compatibility result.
+- A standalone Three.js r185 renderer with a small box scene lost its WebGL context during the 10-second virtual-time test with `preserveDrawingBuffer: false` (observed loss timestamp ~9.01 seconds). Chromium emitted a SwiftShader GPU-stall `ReadPixels` warning.
+- Repeating the same standalone Three.js scene with `preserveDrawingBuffer: true` also lost its context (~7.98 seconds), with the same class of GPU-stall warning.
+- A second, minimal Three.js test (640x360, one basic-material cube, no shadows, no grid, antialias disabled, `preserveDrawingBuffer: false`) also lost its context (~7.21 seconds), again with `ReadPixels` stall warnings.
+
+#### Interpretation
+
+- These results show that, in this particular headless Chromium + SwiftShader + virtual-time harness, even a minimal Three.js renderer can lose its context. The raw WebGL2 control did not lose context during its check.
+- The preserve-buffer A/B does **not** support disabling `preserveDrawingBuffer` as a fix: both settings lost context. No application code change was made based on this test.
+- The result increases suspicion of a Three.js/SwiftShader/headless-rendering interaction or test-harness limitation. It does **not** establish the cause of context loss on real GPU hardware or prove a ToonForge-specific bug. Prior app-level context-loss logs remain evidence of failure in this container only.
+- The standalone tests ran with virtual time accelerated; do not compare their timestamps directly to wall-clock user experience or the earlier editor timing. A real-time desktop test and a physical-GPU test are still required.
+- Temporary HTML diagnostic pages, browser logs, and the Vite server used for this experiment were removed/stopped. No diagnostic files remain in the repository worktree.
+
+#### Next actions
+
+- Do not change renderer context attributes solely from these software-rendering results.
+- Obtain a supported desktop browser with an actual GPU and reproduce editor, preview, showcase, and export in real time. Capture GPU/renderer identity, browser version, context-loss timestamps, and console logs.
+- If real-GPU failure reproduces, isolate renderer features one at a time (shadows, environment maps, imported GLB, text geometry, reference grid, antialiasing) with a reproducible scene. Keep the physical-GPU and native file-picker acceptance blockers open.
